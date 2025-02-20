@@ -151,7 +151,7 @@ def main_worker(worker_id, worker_args):
         dataset_class = SBUDataset
     elif worker_args.dataset == 'climate':
         dataset_class = ClimateDataset
-        worker_args.data_dir = './data/climate'
+        # worker_args.data_dir = './data/climate'
     else:
         raise ValueError(f'invalid dataset name: {worker_args.dataset}!')
 
