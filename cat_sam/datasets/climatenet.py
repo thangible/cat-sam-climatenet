@@ -9,18 +9,18 @@ from cat_sam.datasets.base import BinaryCATSAMDataset
 from cat_sam.datasets.transforms import Compose
 
 class ClimateDataset(BinaryCATSAMDataset):
-    def __init__(self, path, train_flag=True, transforms=None, **prompt_kwargs):
+    def __init__(self, data_dir, train_flag=True, transforms=None, **prompt_kwargs):
         """
         Parameters:
-            path (str): Directory containing the .nc files.
+            data_dir (str): Directory containing the .nc files.
             train_flag (bool): Whether the dataset is used for training.
             transforms (list): A list of transforms to apply.
             prompt_kwargs: Additional keyword arguments for prompt generation.
         """
         # Since BinaryCATSAMDataset expects a dataset_config, we bypass that by manually listing files.
-        self.path = path
+        self.data_dir = data_dir
         self.train_flag = train_flag
-        self.files = [os.path.join(path, f) for f in sorted(os.listdir(path)) if f.endswith(".nc")]
+        self.files = [os.path.join(data_dir, f) for f in sorted(os.listdir(data_dir)) if f.endswith(".nc")]
         self.transforms = Compose(transforms) if transforms else None
         
         # Store prompt generation parameters.
