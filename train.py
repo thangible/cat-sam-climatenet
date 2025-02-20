@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import wandb
 from contextlib import nullcontext
 from functools import partial
 from os.path import join
@@ -23,6 +24,10 @@ from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 
+wandb.init(
+    # set the wandb project where this run will be logged
+    project="cat-sam-climatenet",
+)
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """
@@ -81,7 +86,7 @@ def parse():
         help="The batch size for the validation dataloader. Default to be 1 for one-shot and 4 for 16- and full-shot."
     )
     parser.add_argument(
-        '--dataset', required=True, type=str, choices=['whu', 'sbu', 'kvasir'],
+        '--dataset', required=True, type=str, choices=['whu', 'sbu', 'kvasir', 'climate'],
         help="Your target dataset. This argument is required."
     )
     parser.add_argument(
