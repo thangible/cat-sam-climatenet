@@ -18,6 +18,7 @@ from misc import get_idle_gpu, get_idle_port, set_randomness
 from cat_sam.datasets.whu import WHUDataset
 from cat_sam.datasets.kvasir import KvasirDataset
 from cat_sam.datasets.sbu import SBUDataset
+from cat_sam.datasets.climatenet import ClimateDataset
 from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
@@ -143,6 +144,8 @@ def main_worker(worker_id, worker_args):
         dataset_class = KvasirDataset
     elif worker_args.dataset == 'sbu':
         dataset_class = SBUDataset
+    elif worker_args.dataset == 'climate':
+        dataset_class = ClimateDataset
     else:
         raise ValueError(f'invalid dataset name: {worker_args.dataset}!')
 
