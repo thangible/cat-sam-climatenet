@@ -8,7 +8,7 @@ from cat_sam.datasets.misc import generate_prompts_from_mask
 from cat_sam.datasets.base import BinaryCATSAMDataset  
 from cat_sam.datasets.transforms import Compose
 
-class ClimateDataset(BinaryCATSAMDataset):
+class ClimateDataset(Dataset):
     def __init__(self, data_dir, train_flag=True, transforms=None, **prompt_kwargs):
         """
         Parameters:
@@ -18,9 +18,15 @@ class ClimateDataset(BinaryCATSAMDataset):
             prompt_kwargs: Additional keyword arguments for prompt generation.
         """
         # Since BinaryCATSAMDataset expects a dataset_config, we bypass that by manually listing files.
-        self.data_dir = data_dir
+        train_path = os.path.join(data_dir, "train")
+        test_path = os.path.join(data_dir, "test")
+        sub_dir = train_path if train_flag else test_path
+        # print(sub_dir)
+        self.files = [os.path.join(sub_dir, f) for f in sorted(os.listdir(sub_dir)) if f.endswith(".nc")]
+        if len(self.files) == 0:
+            raise ValueError(f"No .nc files found in directory: {sub_dir}")
+        # print(len(self.files))
         self.train_flag = train_flag
-        self.files = [os.path.join(data_dir, f) for f in sorted(os.listdir(data_dir)) if f.endswith(".nc")]
         self.transforms = Compose(transforms) if transforms else None
         
         # Store prompt generation parameters.

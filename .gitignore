@@ -1,10 +1,12 @@
 **/.DS_Store
 **/.idea/
 *.pth
-data/climate
+data/
 *.pyc
 cat_sam.egg-info/PKG-INFO
 cat_sam.egg-info/SOURCES.txt
 cat_sam.egg-info/top_level.txt
 wandb
 cat_sam.egg-info/dependency_links.txt
+file_structure.txt
+test_dataset.py
