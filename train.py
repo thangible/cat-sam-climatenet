@@ -336,7 +336,7 @@ def main_worker(worker_id, worker_args):
                 })
 
                 # Save and log images with masks every 10 epochs
-                if epoch % 10 == 0 and train_step == 0:
+                if epoch % 2 == 0 and train_step == 0:
                     image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
                     mask = batch['object_masks'][0][0].cpu().numpy() if torch.is_tensor(batch['object_masks'][0][0]) else batch['object_masks'][0][0]
                     pred_mask = masks_pred[0][0].detach().cpu().numpy()
