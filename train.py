@@ -253,7 +253,7 @@ def main_worker(worker_id, worker_args):
         f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
     )
     os.makedirs(exp_path, exist_ok=True)
-    checkpoint_files = glob.glob(os.path.join(worker_args.exp_dir, "**", "best_model.pt"), recursive=True)
+    checkpoint_files = glob.glob(os.path.join(worker_args.exp_dir, "**", "best_model.pth"), recursive=True)
 
     if checkpoint_files:
         checkpoint_path = checkpoint_files[0]  # Load the first match found 
