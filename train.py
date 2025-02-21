@@ -335,16 +335,16 @@ def main_worker(worker_id, worker_args):
                     "dice_loss": loss_dict['dice_loss'].item()
                 })
 
-                # # Save and log images with masks every 10 epochs
-                # if epoch % 2 == 0 and train_step == 0:
-                #     image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
-                #     mask = batch['object_masks'][0][0].cpu().numpy() if torch.is_tensor(batch['object_masks'][0][0]) else batch['object_masks'][0][0]
-                #     pred_mask = masks_pred[0][0].detach().cpu().numpy() if torch.is_tensor(masks_pred[0][0]) else masks_pred[0][0]
-                #     overlay_gt, overlay_pred = save_image_with_mask(image, mask, pred_mask, epoch, train_step)
-                #     wandb.log({
-                #         "train_image_with_gt_mask": wandb.Image(overlay_gt),
-                #         "train_image_with_pred_mask": wandb.Image(overlay_pred)
-                #     })
+                # Save and log images with masks every 10 epochs
+                if epoch % 2 == 0 and train_step == 0:
+                    image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
+                    mask = batch['object_masks'][0][0].cpu().numpy() if torch.is_tensor(batch['object_masks'][0][0]) else batch['object_masks'][0][0]
+                    pred_mask = masks_pred[0][0].detach().cpu().numpy() if torch.is_tensor(masks_pred[0][0]) else masks_pred[0][0]
+                    overlay_gt, overlay_pred = save_image_with_mask(image, mask, pred_mask, epoch, train_step)
+                    wandb.log({
+                        "train_image_with_gt_mask": wandb.Image(overlay_gt),
+                        "train_image_with_pred_mask": wandb.Image(overlay_pred)
+                    })
 
         scheduler.step()
         if train_pbar:
@@ -401,18 +401,18 @@ def main_worker(worker_id, worker_args):
                 best_miou = miou
                 print(f'Best mIoU has been updated to {best_miou:.2%}!')
 
-                # # Log model checkpoint to wandb
-                # wandb.save(join(exp_path, "best_model.pth"))
+                # Log model checkpoint to wandb
+                wandb.save(join(exp_path, "best_model.pth"))
 
-                # # Save and log validation images with masks
-                # image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
-                # mask = batch['gt_masks'][0][0].cpu().numpy() if torch.is_tensor(batch['gt_masks'][0][0]) else batch['gt_masks'][0][0]
-                # pred_mask = masks_pred[0][0].detach().cpu().numpy() if torch.is_tensor(masks_pred[0][0]) else masks_pred[0][0]
-                # overlay_gt, overlay_pred = save_image_with_mask(image, mask, pred_mask, epoch, "val")
-                # wandb.log({
-                #     "val_image_with_gt_mask": wandb.Image(overlay_gt),
-                #     "val_image_with_pred_mask": wandb.Image(overlay_pred)
-                # })
+                # Save and log validation images with masks
+                image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
+                mask = batch['gt_masks'][0][0].cpu().numpy() if torch.is_tensor(batch['gt_masks'][0][0]) else batch['gt_masks'][0][0]
+                pred_mask = masks_pred[0][0].detach().cpu().numpy() if torch.is_tensor(masks_pred[0][0]) else masks_pred[0][0]
+                overlay_gt, overlay_pred = save_image_with_mask(image, mask, pred_mask, epoch, "val")
+                wandb.log({
+                    "val_image_with_gt_mask": wandb.Image(overlay_gt),
+                    "val_image_with_pred_mask": wandb.Image(overlay_pred)
+                })
 
 if __name__ == '__main__':
     args = parse()
