@@ -30,6 +30,8 @@ class ClimateDataset(Dataset):
         self.transforms = Compose(transforms) if transforms else None
         
         # Store prompt generation parameters.
+        prompt_kwargs = self.prompt_kwargs.copy()  # Copy to avoid modifying the original
+        prompt_kwargs.pop("shot_num", None)
         self.prompt_kwargs = prompt_kwargs
 
     def __len__(self):
