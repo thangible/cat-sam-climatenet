@@ -1,5 +1,6 @@
 import argparse
 import os
+import glob
 import random
 import wandb
 from contextlib import nullcontext
@@ -252,11 +253,14 @@ def main_worker(worker_id, worker_args):
         f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
     )
     os.makedirs(exp_path, exist_ok=True)
-    checkpoint_path = os.path.join(worker_args.exp_dir, 'climate_vit_l_cat-a_fullshot',"best_model.pt")
-    if os.path.exists(checkpoint_path):
+    checkpoint_files = glob.glob(os.path.join(worker_args.exp_dir, "**", "best_model.pt"), recursive=True)
+
+    if checkpoint_files:
+        checkpoint_path = checkpoint_files[0]  # Load the first match found 
         print(f"Loading pretrained weights from {checkpoint_path}...")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        model.train()
+    else:
+        print("No checkpoint found, starting training from scratch.")
     for epoch in range(1, max_epoch_num + 1):
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
@@ -332,7 +336,7 @@ def main_worker(worker_id, worker_args):
                 })
 
                 # Save and log images with masks every 10 epochs
-                if epoch % 10 == 0 and train_step == 0:
+                if epoch % 5 == 0 and train_step == 0:
                     image = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
                     mask = batch['object_masks'][0][0].cpu().numpy()
                     pred_mask = masks_pred[0][0].cpu().numpy()
