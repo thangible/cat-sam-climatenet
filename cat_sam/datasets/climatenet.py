@@ -32,8 +32,6 @@ class ClimateDataset(Dataset):
         # Store prompt generation parameters.
         
         self.prompt_kwargs = prompt_kwargs
-        prompt_kwargs = self.prompt_kwargs.copy()  # Copy to avoid modifying the original
-        prompt_kwargs.pop("shot_num", None)
 
     def __len__(self):
         return len(self.files)
@@ -58,10 +56,12 @@ class ClimateDataset(Dataset):
             rgb_image, mask = transformed["image"], transformed["mask"]
         
         # Generate prompts (point, box, and noisy masks).
+        prompt_kwargs = self.prompt_kwargs.copy()  # Copy to avoid modifying the original
+        prompt_kwargs.pop("shot_num", None)
         point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
             gt_mask=mask,
             tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],
-            **self.prompt_kwargs
+            **prompt_kwargs
         )
         
         # Return a dictionary that matches the expected format.
