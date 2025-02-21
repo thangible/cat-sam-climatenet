@@ -9,4 +9,3 @@ cat_sam.egg-info/top_level.txt
 wandb
 cat_sam.egg-info/dependency_links.txt
 file_structure.txt
-test_dataset.py

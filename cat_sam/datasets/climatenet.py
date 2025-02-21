@@ -85,12 +85,21 @@ class ClimateDataset(Dataset):
         var1 = features.sel(variable=var_1).values
         var2 = features.sel(variable=var_2).values
         var3 = features.sel(variable=var_3).values
+
+        # Ensure variables are 2D (H, W) before stacking
+        var1 = np.squeeze(var1)
+        var2 = np.squeeze(var2)
+        var3 = np.squeeze(var3)
         
         # Stack the channels to form an RGB image.
         rgb_image = np.stack([var1, var2, var3], axis=-1)
         # Normalize the image to 0-255.
         rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min())
         rgb_image = (rgb_image * 255).astype(np.uint8)
+
+        # Remove the batch dimension if it exists (1, H, W, C) → (H, W, C)
+        rgb_image = np.squeeze(rgb_image, axis=0)  # Squeeze out batch dim
+
         return rgb_image
 
     def get_labels(self, dataset):
