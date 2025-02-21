@@ -224,7 +224,7 @@ def main_worker(worker_id, worker_args):
     )
     # full-shot
     if worker_args.shot_num is None:
-        max_epoch_num, valid_per_epochs = 30, 1
+        max_epoch_num, valid_per_epochs = 10, 1
     # one-shot
     elif worker_args.shot_num == 1:
         max_epoch_num, valid_per_epochs = 2000, 20
@@ -252,7 +252,11 @@ def main_worker(worker_id, worker_args):
         f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
     )
     os.makedirs(exp_path, exist_ok=True)
-    model.train()
+    checkpoint_path = os.path.join(worker_args.exp_dir, 'climate_vit_l_cat-a_fullshot',"best_model.pt")
+    if os.path.exists(checkpoint_path):
+        print(f"Loading pretrained weights from {checkpoint_path}...")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        model.train()
     for epoch in range(1, max_epoch_num + 1):
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
