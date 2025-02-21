@@ -98,7 +98,8 @@ class ClimateDataset(Dataset):
         rgb_image = (rgb_image * 255).astype(np.uint8)
 
         # Remove the batch dimension if it exists (1, H, W, C) → (H, W, C)
-        rgb_image = np.squeeze(rgb_image, axis=0)  # Squeeze out batch dim
+        if rgb_image.shape[0] == 1:
+            rgb_image = np.squeeze(rgb_image, axis=0) 
 
         return rgb_image
 
