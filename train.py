@@ -348,12 +348,15 @@ def main_worker(worker_id, worker_args):
 if __name__ == '__main__':
     args = parse()
 
-    if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
-        used_gpu = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
+    if torch.cuda.is_available():
+        if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():
+            used_gpu = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
+        else:
+            used_gpu = get_idle_gpu(gpu_num=1)
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(used_gpu[0])
+        args.used_gpu, args.gpu_num = used_gpu, len(used_gpu)
     else:
-        used_gpu = get_idle_gpu(gpu_num=1)
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(used_gpu[0])
-    args.used_gpu, args.gpu_num = used_gpu, len(used_gpu)
+        args.used_gpu, args.gpu_num = [], 0
 
     # launch the experiment process for both single-GPU and multi-GPU settings
     if len(args.used_gpu) == 1:

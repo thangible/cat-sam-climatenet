@@ -2,3 +2,9 @@
 **/.idea/
 *.pth
 data/climate
+*.pyc
+cat_sam.egg-info/PKG-INFO
+cat_sam.egg-info/SOURCES.txt
+cat_sam.egg-info/top_level.txt
+wandb
+cat_sam.egg-info/dependency_links.txt
