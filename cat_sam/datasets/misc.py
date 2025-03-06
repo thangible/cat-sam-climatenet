@@ -43,6 +43,11 @@ def find_objects_from_mask(
 ):
     # from https://github.com/KyanChen/RSPrompter/blob/cky/tools/ins_seg/dataset_converters/whu_building_convert.py
     # Here, we only consider the mask values 1.0 as positive class, i.e., 255 pixel values
+
+    # Ensure the mask is a numpy array
+    mask = np.asarray(mask, dtype=np.uint8)
+    print(f"Mask type: {type(mask)}, Mask shape: {mask.shape}, Mask dtype: {mask.dtype}")
+    
     object_num, objects_im, stats, centroids = cv2.connectedComponentsWithStats(
         image=mask.astype(np.uint8), connectivity=connectivity)
 
