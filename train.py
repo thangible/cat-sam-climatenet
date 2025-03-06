@@ -14,7 +14,6 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from PIL import Image
-import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -31,41 +30,30 @@ from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 wandb.init(project="cat-sam-climatenet", config={
 
 })
+# def save_image_with_mask(image, mask, pred_mask, epoch, step):
+#     """
+#     Save an image with the mask and prediction overlaid.
 
+#     Args:
+#         image (np.ndarray): The image to save.
+#         mask (np.ndarray): The ground truth mask to overlay on the image.
+#         pred_mask (np.ndarray): The predicted mask to overlay on the image.
+#         epoch (int): The current epoch.
+#         step (int): The current step.
+#     """
+#     # Convert image and masks to PIL Image
+#     image_pil = Image.fromarray((image * 255).astype(np.uint8))
+#     mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
+#     pred_mask_pil = Image.fromarray((pred_mask * 255).astype(np.uint8))
 
-def plot_with_projection(image, mask, prediction, use_projection=False, batch_num=None, epoch=None):
-    # Convert tensors to numpy arrays
-    image_np = image.cpu().numpy().transpose(1, 2, 0)  # Convert to HWC format
-    mask_np = mask.cpu().numpy().squeeze()  # Remove channel dimension
-    prediction_np = prediction.cpu().numpy().squeeze()  # Remove channel dimension
+#     # Overlay masks on image
+#     image_pil = image_pil.convert("RGBA")
+#     mask_pil = mask_pil.convert("RGBA")
+#     pred_mask_pil = pred_mask_pil.convert("RGBA")
+#     overlay_gt = Image.blend(image_pil, mask_pil, alpha=0.5)
+#     overlay_pred = Image.blend(image_pil, pred_mask_pil, alpha=0.5)
 
-    # Create a figure
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
-
-    # Plot the image
-    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
-
-    # Plot the mask and prediction contours
-    ax.contour(mask_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Ground Truth')
-    ax.contour(prediction_np, colors='blue', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Prediction')
-
-    # Add a legend
-    ax.legend(['Ground Truth', 'Prediction'])
-
-    # Add title and labels
-    ax.set_title('Image with Mask and Prediction Contours')
-    if use_projection:
-        ax.set_global()
-        ax.coastlines()
-
-    # # Save the plot to a file with epoch and batch number
-    filename = f'contour_plot_epoch_{epoch}_batch_{batch_num}.png'
-    # plt.savefig(filename)
-    # plt.close(fig)
-
-    # Log the image to wandb
-    wandb.log({"contour_plot": wandb.Image(filename, caption="Image with Mask and Prediction Contours")})
-
+#     return overlay_gt, overlay_pred
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """
@@ -178,7 +166,7 @@ def prepare_datasets(worker_args):
     if worker_args.cat_type == 'cat-t' and worker_args.dataset in ['kvasir', 'sbu']:
         transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5)]
     else:
-        transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5)]
+        transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5), RandomCrop(scale=[0.1, 1.0], p=1.0)]
 
     max_object_num = None
     if worker_args.dataset == 'whu':
@@ -295,10 +283,6 @@ def main_worker(worker_id, worker_args):
         train_pbar = None
         if local_rank == 0:
             train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False)
-
-
-
-
         for train_step, batch in enumerate(train_dataloader):
             batch = batch_to_cuda(batch, device)
             masks_pred = model(
@@ -368,25 +352,24 @@ def main_worker(worker_id, worker_args):
 
             # Save and log images with masks every 10 epochs
             if epoch % 10 == 1 and train_step == 0:
-                print("Before processing:")
-                print("Images type:", type(batch['images']))
-                print("Images shape:", [img.shape for img in batch['images'][:4]])
-                print("Masks type:", type(batch['object_masks']))
-                print("Masks shape:", [mask.shape for mask in batch['object_masks'][:4]])
-                print("Preds type:", type(masks_pred))
-                print("Preds shape:", [pred.shape for pred in masks_pred[:4]])
-                
                 # Convert images and masks to a grid
-                # Define the target size for resizing
-                target_size = (3, 256, 256)  # Example target size (channels, height, width)
-                # Resize images to the target size
-                # images = [images.cpu().numpy().transpose(1, 2, 0) for img in batch['images'][:4]]
-                # masks = [masks.cpu().numpy().squeeze() for mask in batch['object_masks'][:4]]
-                # preds = [preds.detach().cpu().numpy().squeeze() for pred in masks_pred[:4]]
-                
-                # for i in range(len(images)):
-                #     plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
-                
+                # Convert images and masks to a grid
+                images = torch.stack([img.cpu() for img in batch['images'][:4]])  # Take the first 4 images in the batch and move them to CPU
+                masks = torch.stack([mask.cpu() for mask in batch['object_masks'][:4]]) if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
+                preds = torch.stack([pred.detach().cpu() for pred in masks_pred[:4]]) if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+
+
+                # Create a grid of images
+                img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+                mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+                pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+
+                # Log the grids to wandb
+                wandb.log({
+                    "train_images": wandb.Image(img_grid, caption="Training Images"),
+                    "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+                    "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+                })
 
         scheduler.step()
         if train_pbar:
