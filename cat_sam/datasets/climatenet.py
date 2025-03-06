@@ -109,8 +109,9 @@ class ClimateDataset(Dataset):
         """
         mask = dataset['LABELS'].values
         mask = (mask == 1).astype(np.uint8)  # Convert to a binary mask.
-        mask = np.ascontiguousarray(mask)
-        mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
+        # mask = np.ascontiguousarray(mask)
+        # mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
+        print("Mask shape:", mask.shape)
         return mask
 
     @staticmethod
