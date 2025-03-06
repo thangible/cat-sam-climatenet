@@ -108,8 +108,8 @@ class ClimateDataset(Dataset):
         Extract and binarize the segmentation mask from the dataset.
         """
         mask = dataset['LABELS'].values
-        mask = (mask == 1).astype(np.uint8).values
-        mask = np.squeeze(mask) 
+        # mask = (mask == 1).astype(np.uint8)
+        # mask = np.squeeze(mask) 
         return mask
 
     @staticmethod
