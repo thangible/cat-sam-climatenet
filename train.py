@@ -143,7 +143,7 @@ def prepare_datasets(worker_args):
     if worker_args.cat_type == 'cat-t' and worker_args.dataset in ['kvasir', 'sbu']:
         transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5)]
     else:
-        transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5), RandomCrop(scale=[0.1, 1.0], p=1.0)]
+        transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5)] # , RandomCrop(scale=[0.1, 1.0], p=1.0)
 
     max_object_num = None
     if worker_args.dataset == 'whu':

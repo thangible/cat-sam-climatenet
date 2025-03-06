@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from cat_sam.datasets.misc import generate_prompts_from_mask
 from cat_sam.datasets.base import BinaryCATSAMDataset  
 from cat_sam.datasets.transforms import Compose
+import cv2
 
 class ClimateDataset(Dataset):
     def __init__(self, data_dir, train_flag=True, transforms=None, **prompt_kwargs):
@@ -17,7 +18,6 @@ class ClimateDataset(Dataset):
             transforms (list): A list of transforms to apply.
             prompt_kwargs: Additional keyword arguments for prompt generation.
         """
-        # Since BinaryCATSAMDataset expects a dataset_config, we bypass that by manually listing files.
         train_path = os.path.join(data_dir, "train")
         test_path = os.path.join(data_dir, "test")
         sub_dir = train_path if train_flag else test_path
@@ -109,6 +109,8 @@ class ClimateDataset(Dataset):
         """
         mask = dataset['LABELS'].values
         mask = (mask == 1).astype(np.uint8)  # Convert to a binary mask.
+        mask = np.ascontiguousarray(mask)
+        mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
         return mask
 
     @staticmethod
