@@ -49,6 +49,8 @@ def find_objects_from_mask(
     print(f"Mask type: {type(mask)}, Mask shape: {mask.shape}, Mask dtype: {mask.dtype}")
     if mask.ndim != 2:
         raise ValueError(f"Expected 2D mask, got {mask.ndim}D mask")
+    # Additional debug information
+    print(f"Mask min value: {mask.min()}, Mask max value: {mask.max()}")
 
     object_num, objects_im, stats, centroids = cv2.connectedComponentsWithStats(
         image=mask, connectivity=connectivity)
