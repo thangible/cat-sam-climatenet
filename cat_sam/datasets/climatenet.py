@@ -109,6 +109,7 @@ class ClimateDataset(Dataset):
         """
         mask = dataset['LABELS'].values
         mask = (mask == 1).astype(np.uint8)  # Convert to a binary mask.
+        mask = np.squeeze(mask)
         return mask
 
     @staticmethod
