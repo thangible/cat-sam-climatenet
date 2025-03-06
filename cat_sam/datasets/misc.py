@@ -53,7 +53,7 @@ def find_objects_from_mask(
     print(f"Mask min value: {mask.min()}, Mask max value: {mask.max()}")
 
     object_num, objects_im, stats, centroids = cv2.connectedComponentsWithStats(
-        image=mask, connectivity=connectivity)
+        image=mask.astype(np.float32), connectivity=connectivity)
 
     # if no foreground object is found, a tuple of None is returned
     if object_num < 2:
