@@ -47,9 +47,11 @@ def find_objects_from_mask(
     # Ensure the mask is a numpy array
     mask = np.asarray(mask, dtype=np.uint8)
     print(f"Mask type: {type(mask)}, Mask shape: {mask.shape}, Mask dtype: {mask.dtype}")
-    
+    if mask.ndim != 2:
+        raise ValueError(f"Expected 2D mask, got {mask.ndim}D mask")
+
     object_num, objects_im, stats, centroids = cv2.connectedComponentsWithStats(
-        image=mask.astype(np.uint8), connectivity=connectivity)
+        image=mask, connectivity=connectivity)
 
     # if no foreground object is found, a tuple of None is returned
     if object_num < 2:
