@@ -30,30 +30,7 @@ from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 wandb.init(project="cat-sam-climatenet", config={
 
 })
-# def save_image_with_mask(image, mask, pred_mask, epoch, step):
-#     """
-#     Save an image with the mask and prediction overlaid.
 
-#     Args:
-#         image (np.ndarray): The image to save.
-#         mask (np.ndarray): The ground truth mask to overlay on the image.
-#         pred_mask (np.ndarray): The predicted mask to overlay on the image.
-#         epoch (int): The current epoch.
-#         step (int): The current step.
-#     """
-#     # Convert image and masks to PIL Image
-#     image_pil = Image.fromarray((image * 255).astype(np.uint8))
-#     mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
-#     pred_mask_pil = Image.fromarray((pred_mask * 255).astype(np.uint8))
-
-#     # Overlay masks on image
-#     image_pil = image_pil.convert("RGBA")
-#     mask_pil = mask_pil.convert("RGBA")
-#     pred_mask_pil = pred_mask_pil.convert("RGBA")
-#     overlay_gt = Image.blend(image_pil, mask_pil, alpha=0.5)
-#     overlay_pred = Image.blend(image_pil, pred_mask_pil, alpha=0.5)
-
-#     return overlay_gt, overlay_pred
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """
