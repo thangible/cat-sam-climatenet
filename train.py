@@ -380,12 +380,12 @@ def main_worker(worker_id, worker_args):
                 # Define the target size for resizing
                 target_size = (3, 256, 256)  # Example target size (channels, height, width)
                 # Resize images to the target size
-                images = [images.cpu().numpy().transpose(1, 2, 0) for img in batch['images'][:4]]
-                masks = [masks.cpu().numpy().squeeze() for mask in batch['object_masks'][:4]]
-                preds = [preds.detach().cpu().numpy().squeeze() for pred in masks_pred[:4]]
+                # images = [images.cpu().numpy().transpose(1, 2, 0) for img in batch['images'][:4]]
+                # masks = [masks.cpu().numpy().squeeze() for mask in batch['object_masks'][:4]]
+                # preds = [preds.detach().cpu().numpy().squeeze() for pred in masks_pred[:4]]
                 
-                for i in range(len(images)):
-                    plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
+                # for i in range(len(images)):
+                #     plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
                 
 
         scheduler.step()
