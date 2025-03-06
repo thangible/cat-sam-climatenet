@@ -261,9 +261,10 @@ def main_worker(worker_id, worker_args):
             class_names = ['Background', 'Foreground']
         iou_eval = StreamSegMetrics(class_names=class_names)
 
+    dir_name = f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
     exp_path = join(
-        worker_args.exp_dir,
-        f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
+        worker_args.exp_dir, dir_name
+        
     )
     os.makedirs(exp_path, exist_ok=True)
     # checkpoint_files = glob.glob(os.path.join(worker_args.exp_dir, "**", "best_model.pth"), recursive=True)
@@ -274,7 +275,7 @@ def main_worker(worker_id, worker_args):
     #     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     # else:
     #     print("No checkpoint found, starting training from scratch.")
-    
+
     for epoch in range(1, max_epoch_num + 1):
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
@@ -349,24 +350,24 @@ def main_worker(worker_id, worker_args):
                     "dice_loss": loss_dict['dice_loss'].item()
                 })
 
-        # Save and log images with masks every 10 epochs
-        if epoch % 10 == 1 and train_step == 0:
-            # Convert images and masks to a grid
-            images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-            masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
-            preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+            # Save and log images with masks every 10 epochs
+            if epoch % 10 == 1 and train_step == 0:
+                # Convert images and masks to a grid
+                images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
+                masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
+                preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
 
-            # Create a grid of images
-            img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-            mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-            pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+                # Create a grid of images
+                img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+                mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+                pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
 
-            # Log the grids to wandb
-            wandb.log({
-                "train_images": wandb.Image(img_grid, caption="Training Images"),
-                "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-            })
+                # Log the grids to wandb
+                wandb.log({
+                    "train_images": wandb.Image(img_grid, caption="Training Images"),
+                    "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+                    "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+                })
 
         scheduler.step()
         if train_pbar:
@@ -415,35 +416,35 @@ def main_worker(worker_id, worker_args):
                 "miou": miou
             })
 
-            if miou > best_miou:
-                torch.save(
-                    model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
-                    join(exp_path, "best_model.pth")
-                )
-                best_miou = miou
-                print(f'Best mIoU has been updated to {best_miou:.2%}!')
+            # if miou > best_miou:
+            #     torch.save(
+            #         model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
+            #         join(exp_path, "best_model.pth")
+            #     )
+            #     best_miou = miou
+            #     print(f'Best mIoU has been updated to {best_miou:.2%}!')
 
-                # Log model checkpoint to wandb
-                wandb.save(join(exp_path, "best_model.pth"))
+            #     # Log model checkpoint to wandb
+            #     wandb.save(join(exp_path, "best_model.pth"))
 
         # Save and log validation images with masks
-        if epoch % 10 == 0 and val_step == 0:
-            # Convert images and masks to a grid
-            images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-            masks = batch['gt_masks'][:4].cpu() if torch.is_tensor(batch['gt_masks'][0]) else torch.tensor(batch['gt_masks'][:4])
-            preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+            if epoch % 10 == 1 and val_step == 0:
+                # Convert images and masks to a grid
+                images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
+                masks = batch['gt_masks'][:4].cpu() if torch.is_tensor(batch['gt_masks'][0]) else torch.tensor(batch['gt_masks'][:4])
+                preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
 
-            # Create a grid of images
-            img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-            mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-            pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+                # Create a grid of images
+                img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+                mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+                pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
 
-            # Log the grids to wandb
-            wandb.log({
-                "val_images": wandb.Image(img_grid, caption="Validation Images"),
-                "val_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                "val_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-            })
+                # Log the grids to wandb
+                wandb.log({
+                    "val_images": wandb.Image(img_grid, caption="Validation Images"),
+                    "val_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+                    "val_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+                })
 
 if __name__ == '__main__':
     args = parse()
