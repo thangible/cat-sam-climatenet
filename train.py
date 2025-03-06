@@ -27,33 +27,10 @@ from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 
-wandb.init(project="cat-sam-climatenet", config={
+# wandb.init(project="cat-sam-climatenet", config={
 
-})
-# def save_image_with_mask(image, mask, pred_mask, epoch, step):
-#     """
-#     Save an image with the mask and prediction overlaid.
+# })
 
-#     Args:
-#         image (np.ndarray): The image to save.
-#         mask (np.ndarray): The ground truth mask to overlay on the image.
-#         pred_mask (np.ndarray): The predicted mask to overlay on the image.
-#         epoch (int): The current epoch.
-#         step (int): The current step.
-#     """
-#     # Convert image and masks to PIL Image
-#     image_pil = Image.fromarray((image * 255).astype(np.uint8))
-#     mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
-#     pred_mask_pil = Image.fromarray((pred_mask * 255).astype(np.uint8))
-
-#     # Overlay masks on image
-#     image_pil = image_pil.convert("RGBA")
-#     mask_pil = mask_pil.convert("RGBA")
-#     pred_mask_pil = pred_mask_pil.convert("RGBA")
-#     overlay_gt = Image.blend(image_pil, mask_pil, alpha=0.5)
-#     overlay_pred = Image.blend(image_pil, pred_mask_pil, alpha=0.5)
-
-#     return overlay_gt, overlay_pred
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """
@@ -340,33 +317,33 @@ def main_worker(worker_id, worker_args):
                 )
                 train_pbar.set_postfix_str(str_step_info)
 
-                # Log metrics to wandb
-                wandb.log({
-                    "epoch": epoch,
-                    "train_step": train_step,
-                    "total_loss": loss_dict['total_loss'].item(),
-                    "bce_loss": loss_dict['bce_loss'].item(),
-                    "dice_loss": loss_dict['dice_loss'].item()
-                })
+                # # Log metrics to wandb
+                # wandb.log({
+                #     "epoch": epoch,
+                #     "train_step": train_step,
+                #     "total_loss": loss_dict['total_loss'].item(),
+                #     "bce_loss": loss_dict['bce_loss'].item(),
+                #     "dice_loss": loss_dict['dice_loss'].item()
+                # })
 
         # Save and log images with masks every 10 epochs
-        if epoch % 10 == 1 and train_step == 0:
-            # Convert images and masks to a grid
-            images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-            masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
-            preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+        # if epoch % 10 == 1 and train_step == 0:
+        #     # Convert images and masks to a grid
+        #     images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
+        #     masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
+        #     preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
 
-            # Create a grid of images
-            img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-            mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-            pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+        #     # Create a grid of images
+        #     img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+        #     mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+        #     pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
 
-            # Log the grids to wandb
-            wandb.log({
-                "train_images": wandb.Image(img_grid, caption="Training Images"),
-                "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-            })
+        #     # Log the grids to wandb
+        #     wandb.log({
+        #         "train_images": wandb.Image(img_grid, caption="Training Images"),
+        #         "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+        #         "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+        #     })
 
         scheduler.step()
         if train_pbar:
