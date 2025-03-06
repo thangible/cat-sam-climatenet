@@ -6,6 +6,7 @@ from typing import List
 import cv2
 import numpy as np
 import torch
+import wandb
 import torch.nn.functional as F
 
 
@@ -43,8 +44,9 @@ def find_objects_from_mask(
 ):
     # from https://github.com/KyanChen/RSPrompter/blob/cky/tools/ins_seg/dataset_converters/whu_building_convert.py
     # Here, we only consider the mask values 1.0 as positive class, i.e., 255 pixel values
-    print(mask)
-    print(mask.shape)
+    wandb.init(project="mask-logging")
+
+    wandb.log({"mask_shape": mask.shape, "mask": wandb.Image(mask)})
     object_num, objects_im, stats, centroids = cv2.connectedComponentsWithStats(
         image=mask.astype(np.uint8), connectivity=connectivity)
 
