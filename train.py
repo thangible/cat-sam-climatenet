@@ -352,9 +352,19 @@ def main_worker(worker_id, worker_args):
 
             # Save and log images with masks every 10 epochs
             if epoch % 10 == 1 and train_step == 0:
+                print("Before processing:")
+                print("Images type:", type(batch['images']))
+                print("Images shape:", [img.shape for img in batch['images'][:4]])
+                print("Masks type:", type(batch['object_masks']))
+                print("Masks shape:", [mask.shape for mask in batch['object_masks'][:4]])
+                print("Preds type:", type(masks_pred))
+                print("Preds shape:", [pred.shape for pred in masks_pred[:4]])
+                
                 # Convert images and masks to a grid
-                # Convert images and masks to a grid
-                images = torch.stack([img.cpu() for img in batch['images'][:4]])  # Take the first 4 images in the batch and move them to CPU
+                # Define the target size for resizing
+                target_size = (3, 256, 256)  # Example target size (channels, height, width)
+                # Resize images to the target size
+                images = torch.stack([F.interpolate(img.unsqueeze(0), size=target_size[1:]).squeeze(0).cpu() for img in batch['images'][:4]])
                 masks = torch.stack([mask.cpu() for mask in batch['object_masks'][:4]]) if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
                 preds = torch.stack([pred.detach().cpu() for pred in masks_pred[:4]]) if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
 
@@ -363,6 +373,16 @@ def main_worker(worker_id, worker_args):
                 img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
                 mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
                 pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+
+                  
+                # Print type and shape after processing
+                print("After processing:")
+                print("Images type:", type(images))
+                print("Images shape:", images.shape)
+                print("Masks type:", type(masks))
+                print("Masks shape:", masks.shape)
+                print("Preds type:", type(preds))
+                print("Preds shape:", preds.shape)
 
                 # Log the grids to wandb
                 wandb.log({
