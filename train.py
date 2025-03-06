@@ -55,7 +55,7 @@ wandb.init(project="cat-sam-climatenet", config={
 
 #     return overlay_gt, overlay_pred
 
-def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
+def calculate_dice_loss_binary(inputs: torch.Tensor, targets: torch.Tensor):
     """
     Compute the DICE loss, similar to generalized IOU for masks
     Args:
@@ -74,6 +74,26 @@ def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     loss = 1 - (numerator + 1) / (denominator + 1)
     return loss.mean()
 
+def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor, num_classes: int):
+    """
+    Compute the DICE loss for multi-class segmentation.
+    Args:
+        inputs: A float tensor of shape (N, C, H, W).
+                The predictions for each example.
+        targets: A long tensor of shape (N, H, W).
+                 The ground truth labels for each element in inputs.
+        num_classes: The number of classes.
+    """
+    assert inputs.size(0) == targets.size(0)
+    inputs = inputs.softmax(dim=1)
+    targets_one_hot = torch.nn.functional.one_hot(targets, num_classes).permute(0, 3, 1, 2).float()
+
+    inputs, targets_one_hot = inputs.flatten(2), targets_one_hot.flatten(2)
+
+    numerator = 2 * (inputs * targets_one_hot).sum(-1)
+    denominator = inputs.sum(-1) + targets_one_hot.sum(-1)
+    loss = 1 - (numerator + 1) / (denominator + 1)
+    return loss.mean()
 
 def worker_init_fn(worker_id: int, base_seed: int, same_worker_seed: bool = True):
     """
@@ -302,9 +322,8 @@ def main_worker(worker_id, worker_args):
             bce_loss_list, dice_loss_list, focal_loss_list = [], [], []
             for i in range(len(masks_pred)):
                 pred, label = masks_pred[i], masks_gt[i]
-                label = torch.where(torch.gt(label, 0.), 1., 0.)
-                b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
-                d_loss = calculate_dice_loss(pred, label)
+                b_loss = F.cross_entropy(pred, label.long())
+                d_loss = calculate_dice_loss(pred, label, num_classes=3)
 
                 bce_loss_list.append(b_loss)
                 dice_loss_list.append(d_loss)
@@ -351,46 +370,43 @@ def main_worker(worker_id, worker_args):
                 })
 
             # Save and log images with masks every 10 epochs
-            if epoch % 10 == 1 and train_step == 0:
-                print("Before processing:")
-                print("Images type:", type(batch['images']))
-                print("Images shape:", [img.shape for img in batch['images'][:4]])
-                print("Masks type:", type(batch['object_masks']))
-                print("Masks shape:", [mask.shape for mask in batch['object_masks'][:4]])
-                print("Preds type:", type(masks_pred))
-                print("Preds shape:", [pred.shape for pred in masks_pred[:4]])
+            # if epoch % 10 == 1 and train_step == 0:
+            #     print("Before processing:")
+            #     print("Images type:", type(batch['images']))
+            #     print("Images shape:", [img.shape for img in batch['images'][:4]])
+            #     print("Masks type:", type(batch['object_masks']))
+            #     print("Masks shape:", [mask.shape for mask in batch['object_masks'][:4]])
+            #     print("Preds type:", type(masks_pred))
+            #     print("Preds shape:", [pred.shape for pred in masks_pred[:4]])
                 
-                # Convert images and masks to a grid
-                # Define the target size for resizing
-                target_size = (3, 256, 256)  # Example target size (channels, height, width)
-                # Resize images to the target size
-                images = torch.stack([F.interpolate(img.unsqueeze(0), size=target_size[1:]).squeeze(0).cpu() for img in batch['images'][:4]])
-                masks = torch.stack([F.interpolate(mask.unsqueeze(0), size=target_size).squeeze(0).cpu() for mask in batch['object_masks'][:4]])
-                preds = torch.stack([F.interpolate(pred.unsqueeze(0), size=target_size).squeeze(0).detach().cpu() for pred in masks_pred[:4]])
+            #     # Convert images and masks to a grid
+            #     # Define the target size for resizing
+            #     target_size = (3, 256, 256)  # Example target size (channels, height, width)
+            #     # Resize images to the target size
+            #     images = torch.stack([F.interpolate(img.unsqueeze(0), size=target_size[1:]).squeeze(0).cpu() for img in batch['images'][:4]])
+            #     masks = torch.stack([F.interpolate(mask.unsqueeze(0), size=target_size).squeeze(0).cpu() for mask in batch['object_masks'][:4]])
+            #     preds = torch.stack([F.interpolate(pred.unsqueeze(0), size=target_size).squeeze(0).detach().cpu() for pred in masks_pred[:4]])
 
+            #     # Create a grid of images
+            #     img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+            #     mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+            #     pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
 
+            #     # Print type and shape after processing
+            #     print("After processing:")
+            #     print("Images type:", type(images))
+            #     print("Images shape:", images.shape)
+            #     print("Masks type:", type(masks))
+            #     print("Masks shape:", masks.shape)
+            #     print("Preds type:", type(preds))
+            #     print("Preds shape:", preds.shape)
 
-                # Create a grid of images
-                img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-                mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-                pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
-
-                  
-                # Print type and shape after processing
-                print("After processing:")
-                print("Images type:", type(images))
-                print("Images shape:", images.shape)
-                print("Masks type:", type(masks))
-                print("Masks shape:", masks.shape)
-                print("Preds type:", type(preds))
-                print("Preds shape:", preds.shape)
-
-                # Log the grids to wandb
-                wandb.log({
-                    "train_images": wandb.Image(img_grid, caption="Training Images"),
-                    "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                    "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-                })
+            #     # Log the grids to wandb
+            #     wandb.log({
+            #         "train_images": wandb.Image(img_grid, caption="Training Images"),
+            #         "train_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+            #         "train_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+            #     })
 
         scheduler.step()
         if train_pbar:
