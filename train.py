@@ -365,8 +365,8 @@ def main_worker(worker_id, worker_args):
                 target_size = (3, 256, 256)  # Example target size (channels, height, width)
                 # Resize images to the target size
                 images = torch.stack([F.interpolate(img.unsqueeze(0), size=target_size[1:]).squeeze(0).cpu() for img in batch['images'][:4]])
-                masks = torch.stack([mask.cpu() for mask in batch['object_masks'][:4]]) if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
-                preds = torch.stack([pred.detach().cpu() for pred in masks_pred[:4]]) if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+                masks = torch.stack([F.interpolate(mask, size=target_size).cpu() for mask in batch['object_masks'][:4]])
+                preds = torch.stack([F.interpolate(pred, size=target_size).detach().cpu() for pred in masks_pred[:4]])
 
 
                 # Create a grid of images
