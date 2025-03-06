@@ -353,9 +353,11 @@ def main_worker(worker_id, worker_args):
             # Save and log images with masks every 10 epochs
             if epoch % 10 == 1 and train_step == 0:
                 # Convert images and masks to a grid
-                images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-                masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
-                preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+                # Convert images and masks to a grid
+                images = torch.stack([img.cpu() for img in batch['images'][:4]])  # Take the first 4 images in the batch and move them to CPU
+                masks = torch.stack([mask.cpu() for mask in batch['object_masks'][:4]]) if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
+                preds = torch.stack([pred.detach().cpu() for pred in masks_pred[:4]]) if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+
 
                 # Create a grid of images
                 img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
@@ -428,23 +430,23 @@ def main_worker(worker_id, worker_args):
             #     wandb.save(join(exp_path, "best_model.pth"))
 
         # Save and log validation images with masks
-            if epoch % 10 == 1 and val_step == 0:
-                # Convert images and masks to a grid
-                images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-                masks = batch['gt_masks'][:4].cpu() if torch.is_tensor(batch['gt_masks'][0]) else torch.tensor(batch['gt_masks'][:4])
-                preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
+            # if epoch % 10 == 1 and val_step == 0:
+            #     # Convert images and masks to a grid
+            #     images = batch['images'][:4]  # Take the first 4 images in the batch
+            #     masks = batch['gt_masks'][:4] if torch.is_tensor(batch['gt_masks'][0]) else torch.tensor(batch['gt_masks'][:4])
+            #     preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
 
-                # Create a grid of images
-                img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-                mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-                pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
+            #     # Create a grid of images
+            #     img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
+            #     mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
+            #     pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
 
-                # Log the grids to wandb
-                wandb.log({
-                    "val_images": wandb.Image(img_grid, caption="Validation Images"),
-                    "val_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                    "val_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-                })
+            #     # Log the grids to wandb
+            #     wandb.log({
+            #         "val_images": wandb.Image(img_grid, caption="Validation Images"),
+            #         "val_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
+            #         "val_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
+            #     })
 
 if __name__ == '__main__':
     args = parse()
