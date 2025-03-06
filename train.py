@@ -322,7 +322,7 @@ def main_worker(worker_id, worker_args):
             bce_loss_list, dice_loss_list, focal_loss_list = [], [], []
             for i in range(len(masks_pred)):
                 pred, label = masks_pred[i], masks_gt[i]
-                b_loss = F.cross_entropy(pred, label.long())
+                b_loss = F.cross_entropy(pred, label)
                 d_loss = calculate_dice_loss(pred, label, num_classes=3)
 
                 bce_loss_list.append(b_loss)
