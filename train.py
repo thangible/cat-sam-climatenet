@@ -144,13 +144,13 @@ def batch_to_cuda(batch, device):
             ]
     return batch
 
-
-
-def main_worker(worker_id, worker_args):
+def initialize_worker(worker_id, worker_args):
     set_randomness()
     if isinstance(worker_id, str):
         worker_id = int(worker_id)
+    return worker_id
 
+def setup_device_and_distributed(worker_id, worker_args):
     gpu_num = len(worker_args.used_gpu)
     world_size = os.environ['WORLD_SIZE'] if 'WORLD_SIZE' in os.environ.keys() else gpu_num
     base_rank = os.environ['RANK'] if 'RANK' in os.environ.keys() else 0
@@ -158,10 +158,11 @@ def main_worker(worker_id, worker_args):
     if gpu_num > 1:
         dist.init_process_group(backend='nccl', init_method=worker_args.dist_url,
                                 world_size=world_size, rank=local_rank)
-
     device = torch.device(f"cuda:{worker_id}")
     torch.cuda.set_device(device)
+    return device, local_rank
 
+def prepare_datasets(worker_args):
     if worker_args.cat_type == 'cat-t' and worker_args.dataset in ['kvasir', 'sbu']:
         transforms = [VerticalFlip(p=0.5), HorizontalFlip(p=0.5)]
     else:
@@ -177,7 +178,6 @@ def main_worker(worker_id, worker_args):
         dataset_class = SBUDataset
     elif worker_args.dataset == 'climate':
         dataset_class = ClimateDataset
-        # worker_args.data_dir = './data/climate'
     else:
         raise ValueError(f'invalid dataset name: {worker_args.dataset}!')
 
@@ -187,7 +187,9 @@ def main_worker(worker_id, worker_args):
         transforms=transforms, max_object_num=max_object_num
     )
     val_dataset = dataset_class(data_dir=dataset_dir, train_flag=False)
+    return train_dataset, val_dataset
 
+def create_dataloaders(train_dataset, val_dataset, worker_args):
     train_bs = worker_args.train_bs if worker_args.train_bs else (1 if worker_args.shot_num == 1 else 4)
     val_bs = worker_args.val_bs if worker_args.val_bs else 2
     train_workers, val_workers = 1 if worker_args.shot_num == 1 else 4, 2
@@ -207,7 +209,9 @@ def main_worker(worker_id, worker_args):
         dataset=val_dataset, batch_size=val_bs, shuffle=False, num_workers=val_workers,
         drop_last=False, collate_fn=val_dataset.collate_fn
     )
+    return train_dataloader, val_dataloader
 
+def initialize_model(worker_args, device, local_rank):
     if worker_args.cat_type == 'cat-t':
         model_class = CATSAMT
     elif worker_args.cat_type == 'cat-a':
@@ -220,17 +224,16 @@ def main_worker(worker_id, worker_args):
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
         )
+    return model
 
+def setup_optimizer_and_scheduler(model, worker_args):
     optimizer = torch.optim.AdamW(
         params=[p for p in model.parameters() if p.requires_grad], lr=1e-3, weight_decay=1e-4
     )
-    # full-shot
     if worker_args.shot_num is None:
         max_epoch_num, valid_per_epochs = 50, 1
-    # one-shot
     elif worker_args.shot_num == 1:
         max_epoch_num, valid_per_epochs = 2000, 20
-    # 16-shot
     elif worker_args.shot_num == 16:
         max_epoch_num, valid_per_epochs = 200, 2
     else:
@@ -238,6 +241,15 @@ def main_worker(worker_id, worker_args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=max_epoch_num, eta_min=1e-5
     )
+    return optimizer, scheduler, max_epoch_num, valid_per_epochs
+                          
+def main_worker(worker_id, worker_args):
+    worker_id = initialize_worker(worker_id, worker_args)
+    device, local_rank = setup_device_and_distributed(worker_id, worker_args)
+    train_dataset, val_dataset = prepare_datasets(worker_args)
+    train_dataloader, val_dataloader = create_dataloaders(train_dataset, val_dataset, worker_args)
+    model = initialize_model(worker_args, device, local_rank)
+    optimizer, scheduler, max_epoch_num, valid_per_epochs = setup_optimizer_and_scheduler(model, worker_args)
 
     best_miou = 0
     if worker_args.dataset == 'hqseg44k':
@@ -262,6 +274,7 @@ def main_worker(worker_id, worker_args):
     #     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     # else:
     #     print("No checkpoint found, starting training from scratch.")
+    
     for epoch in range(1, max_epoch_num + 1):
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
@@ -337,7 +350,7 @@ def main_worker(worker_id, worker_args):
                 })
 
         # Save and log images with masks every 10 epochs
-        if epoch % 10 == 0 and train_step == 0:
+        if epoch % 10 == 1 and train_step == 0:
             # Convert images and masks to a grid
             images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
             masks = batch['object_masks'][:4].cpu() if torch.is_tensor(batch['object_masks'][0]) else torch.tensor(batch['object_masks'][:4])
