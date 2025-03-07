@@ -387,7 +387,7 @@ def main_worker(worker_id, worker_args):
                 target_size = (3, 256, 256)  # Example target size (channels, height, width)
                 # Resize images to the target size
                 images = [img for img in batch['images'][:4]]
-                masks = [mask for mask in batch['object_masks'][:4]]
+                masks = [mask for mask in batch['gt_masks'][:4]]
                 preds = [pred for pred in masks_pred[:4]]
                 
                 for i in range(len(images)):
