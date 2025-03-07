@@ -345,6 +345,16 @@ def main_worker(worker_id, worker_args):
                 dice_loss=dice_loss.clone().detach()
             )
 
+            # Log metrics to wandb
+            wandb.log({
+                "epoch": epoch,
+                "train_step": train_step,
+                "total_loss": loss_dict['total_loss'].item(),
+                "bce_loss": loss_dict['bce_loss'].item(),
+                "dice_loss": loss_dict['dice_loss'].item()
+            })
+
+
             backward_context = nullcontext
             if torch.distributed.is_initialized():
                 backward_context = model.no_sync
@@ -368,15 +378,7 @@ def main_worker(worker_id, worker_args):
                 )
                 train_pbar.set_postfix_str(str_step_info)
 
-                # Log metrics to wandb
-                wandb.log({
-                    "epoch": epoch,
-                    "train_step": train_step,
-                    "total_loss": loss_dict['total_loss'].item(),
-                    "bce_loss": loss_dict['bce_loss'].item(),
-                    "dice_loss": loss_dict['dice_loss'].item()
-                })
-
+                
             if epoch % 10 == 1 and train_step == 0:
                 # print("Before processing:")
                 # print("Images type:", type(batch['images']))
