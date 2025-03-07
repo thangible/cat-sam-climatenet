@@ -51,6 +51,7 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
 
     # Plot the RGB image
     ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
+    ax.add_feature(cfeature.COASTLINE, edgecolor='black')
 
     # Plot the mask and prediction contours
     if mask_np.ndim == 3:
@@ -367,14 +368,14 @@ def main_worker(worker_id, worker_args):
                 )
                 train_pbar.set_postfix_str(str_step_info)
 
-                # # Log metrics to wandb
-                # wandb.log({
-                #     "epoch": epoch,
-                #     "train_step": train_step,
-                #     "total_loss": loss_dict['total_loss'].item(),
-                #     "bce_loss": loss_dict['bce_loss'].item(),
-                #     "dice_loss": loss_dict['dice_loss'].item()
-                # })
+                # Log metrics to wandb
+                wandb.log({
+                    "epoch": epoch,
+                    "train_step": train_step,
+                    "total_loss": loss_dict['total_loss'].item(),
+                    "bce_loss": loss_dict['bce_loss'].item(),
+                    "dice_loss": loss_dict['dice_loss'].item()
+                })
 
             if epoch % 10 == 1 and train_step == 0:
                 # print("Before processing:")
