@@ -40,6 +40,8 @@ class ClimateDataset(Dataset):
         # Use filename as the unique index name.
         file_path = self.files[index]
         index_name = os.path.basename(file_path)
+
+
         
         # Load the .nc file.
         dataset = xr.load_dataset(file_path)
@@ -111,7 +113,7 @@ class ClimateDataset(Dataset):
         mask = (mask == 1).astype(np.uint8)  # Convert to a binary mask.
         # mask = np.ascontiguousarray(mask)
         # mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
-        print("Mask shape:", mask.shape)
+        # print("Mask shape:", mask.shape)
         return mask
 
     @staticmethod
