@@ -29,9 +29,9 @@ from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 
-# wandb.init(project="cat-sam-climatenet", config={
+wandb.init(project="cat-sam-climatenet", config={
 
-# })
+})
 def plot_with_projection(image, mask, prediction, use_projection=False, batch_num=None, epoch=None):
     # Convert tensors to numpy arrays
     image_np = image.cpu().numpy().transpose(1, 2, 0)  # Convert to HWC format
@@ -372,6 +372,9 @@ def main_worker(worker_id, worker_args):
                 # Define the target size for resizing
                 target_size = (3, 256, 256)  # Example target size (channels, height, width)
                 # Resize images to the target size
+                images = [img for img in batch['images'][:4]]
+                masks = [mask for mask in batch['object_masks'][:4]]
+                preds = [pred for pred in masks_pred[:4]]
                 
                 for i in range(len(images)):
                     plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
