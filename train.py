@@ -16,6 +16,7 @@ import torch.multiprocessing as mp
 from PIL import Image
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -40,42 +41,52 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     prediction_np = prediction.detach().cpu().numpy().squeeze()  # Remove channel dimension
 
     # Create a figure
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
+    latitudes = np.linspace(-90, 90, image_np.shape[0])
+    longitudes = np.linspace(-180, 180, image_np.shape[1])
+
+    fig = plt.figure(figsize=(12, 6))
+    ax = plt.axes(projection = ccrs.PlateCarree() if use_projection else {})
+
+    ax.add_feature(cfeature.COASTLINE)
+
+    plot = ax.contourf(longitudes, latitudes, image_np, transform=ccrs.PlateCarree() if use_projection else None)
+
+    cbar = plt.colorbar(plot, ax=ax, orientation='horizontal', pad=0.05)
+    cbar.set_label('Map Projection U85, V85, and TMQ')
+
+    # fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
 
     # Plot the image
-    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
+    # ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
 
     # Plot the mask and prediction contours
     if mask_np.ndim == 3:
         for i in range(mask_np.shape[0]):
-            ax.contour(mask_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Ground Truth')
+            ax.contour(longitudes, latitudes, mask_np[i],  transform=ccrs.PlateCarree() if use_projection else None, colors='green', linewidths=1, levels=[0.5], label='Ground Truth')
     else:
-        ax.contour(mask_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Ground Truth')
+        ax.contour(longitudes, latitudes, mask_np, transform=ccrs.PlateCarree() if use_projection else None, colors='green', linewidths=1, levels=[0.5], label='Ground Truth')
 
     if prediction_np.ndim == 3:
         for i in range(prediction_np.shape[0]):
-            ax.contour(prediction_np[i], colors='blue', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Prediction')
+            ax.contour(longitudes, latitudes, prediction_np[i], transform=ccrs.PlateCarree() if use_projection else None, colors='red', linewidths=1, levels=[0.5], label='Prediction')
     else:
-        ax.contour(prediction_np, colors='blue', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None, label='Prediction')
-
+        ax.contour(longitudes, latitudes, prediction_np, transform=ccrs.PlateCarree() if use_projection else None, colors='red', linewidths=1, levels=[0.5], label='Prediction')
+    
     # Add a legend
-    ax.legend(['Ground Truth', 'Prediction'])
+    red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
+    greeen_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
+    plt.legend(handles=[red_path, greeen_path], loc='upper right')
 
     # Add title and labels
-    ax.set_title('Image with Mask and Prediction Contours')
-    if use_projection:
-        ax.set_global()
-        ax.coastlines()
+    plt.title('Map Projection with Ground Truth and Prediction')
 
     # Save the plot to a file with epoch and batch number
     filename = f'contour_plot_epoch_{epoch}_batch_{batch_num}.png'
-    plt.savefig(filename)
-    plt.close(fig)
 
     # Log the image to wandb
     wandb.log({"contour_plot": wandb.Image(filename, caption="Image with Mask and Prediction Contours")})
 
-    
+
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """
     Compute the DICE loss, similar to generalized IOU for masks
