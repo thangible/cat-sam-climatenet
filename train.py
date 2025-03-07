@@ -40,48 +40,40 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     mask_np = mask.cpu().numpy().squeeze()  # Remove channel dimension
     prediction_np = prediction.detach().cpu().numpy().squeeze()  # Remove channel dimension
 
+    # Normalize image data to [0, 1] range for imshow
+    image_np = image_np / 255.0
+
     # Create a figure
-    latitudes = np.linspace(-90, 90, image_np.shape[0])
-    longitudes = np.linspace(-180, 180, image_np.shape[1])
+    fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
 
-    fig = plt.figure(figsize=(12, 6))
-    ax = plt.axes(projection = ccrs.PlateCarree() if use_projection else {})
-
-    ax.add_feature(cfeature.COASTLINE)
-
-    plot = ax.contourf(longitudes, latitudes, image_np, transform=ccrs.PlateCarree() if use_projection else None)
-
-    cbar = plt.colorbar(plot, ax=ax, orientation='horizontal', pad=0.05)
-    cbar.set_label('Map Projection U85, V85, and TMQ')
-
-    # fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
-
-    # Plot the image
-    # ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
+    # Plot the RGB image
+    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
 
     # Plot the mask and prediction contours
     if mask_np.ndim == 3:
         for i in range(mask_np.shape[0]):
-            ax.contour(longitudes, latitudes, mask_np[i],  transform=ccrs.PlateCarree() if use_projection else None, colors='green', linewidths=1, levels=[0.5], label='Ground Truth')
+            ax.contour(mask_np[i], colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
     else:
-        ax.contour(longitudes, latitudes, mask_np, transform=ccrs.PlateCarree() if use_projection else None, colors='green', linewidths=1, levels=[0.5], label='Ground Truth')
+        ax.contour(mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     if prediction_np.ndim == 3:
         for i in range(prediction_np.shape[0]):
-            ax.contour(longitudes, latitudes, prediction_np[i], transform=ccrs.PlateCarree() if use_projection else None, colors='red', linewidths=1, levels=[0.5], label='Prediction')
+            ax.contour(prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
     else:
-        ax.contour(longitudes, latitudes, prediction_np, transform=ccrs.PlateCarree() if use_projection else None, colors='red', linewidths=1, levels=[0.5], label='Prediction')
-    
+        ax.contour(prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+
     # Add a legend
     red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
-    greeen_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
-    plt.legend(handles=[red_path, greeen_path], loc='upper right')
+    green_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
+    plt.legend(handles=[red_path, green_path], loc='upper right')
 
     # Add title and labels
     plt.title('Map Projection with Ground Truth and Prediction')
 
     # Save the plot to a file with epoch and batch number
     filename = f'contour_plot_epoch_{epoch}_batch_{batch_num}.png'
+    plt.savefig(filename)
+    plt.close(fig)
 
     # Log the image to wandb
     wandb.log({"contour_plot": wandb.Image(filename, caption="Image with Mask and Prediction Contours")})
