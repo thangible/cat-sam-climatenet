@@ -40,6 +40,9 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     mask_np = mask.cpu().numpy().squeeze()  # Remove channel dimension
     prediction_np = prediction.detach().cpu().numpy().squeeze()  # Remove channel dimension
 
+    longitudes = np.linspace(-180, 180, image_np.shape[1])
+    latitudes = np.linspace(-90, 90, image_np.shape[0])
+
     # Normalize image data to [0, 1] range for imshow
     image_np = image_np / 255.0
 
@@ -52,15 +55,15 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     # Plot the mask and prediction contours
     if mask_np.ndim == 3:
         for i in range(mask_np.shape[0]):
-            ax.contour(mask_np[i], colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+            ax.contour(longitudes, latitudes, mask_np[i], colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
     else:
-        ax.contour(mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+        ax.contour(longitudes, latitudes, mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     if prediction_np.ndim == 3:
         for i in range(prediction_np.shape[0]):
-            ax.contour(prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+            ax.contour(longitudes, latitudes, prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
     else:
-        ax.contour(prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+        ax.contour(longitudes, latitudes, prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     # Add a legend
     red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
