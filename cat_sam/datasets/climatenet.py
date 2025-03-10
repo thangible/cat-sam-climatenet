@@ -46,10 +46,16 @@ class ClimateDataset(Dataset):
         # Load the .nc file.
         dataset = xr.load_dataset(file_path)
         
+        # 
+        prompt_kwargs = self.prompt_kwargs.copy() 
+        
+        
         # Generate the RGB image from selected climate variables.
-        rgb_image = self.to_image(dataset)  # see function below
+        rgb_image, [var1, var2, var3] = self.to_image(dataset)  # see function below
         
         # Generate the binary mask from the dataset.
+        prompt_kwargs.pop("climatenet_label", 'cyclone')
+        
         mask = self.get_labels(dataset)  # see function below
         
         # Apply optional transforms.
@@ -58,7 +64,6 @@ class ClimateDataset(Dataset):
             rgb_image, mask = transformed["image"], transformed["mask"]
         
         # Generate prompts (point, box, and noisy masks).
-        prompt_kwargs = self.prompt_kwargs.copy()  # Copy to avoid modifying the original
         prompt_kwargs.pop("shot_num", None)
         point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
             gt_mask=mask,
@@ -74,7 +79,8 @@ class ClimateDataset(Dataset):
             "point_coords": point_coords,
             "box_coords": box_coords,
             "noisy_object_masks": noisy_object_masks,
-            "object_masks": object_masks
+            "object_masks": object_masks,
+            "var_names": [var1, var2, var3]
         }
 
     def to_image(self, dataset, var_1='TMQ', var_2='U850', var_3='V850'):
@@ -103,14 +109,21 @@ class ClimateDataset(Dataset):
         if rgb_image.shape[0] == 1:
             rgb_image = np.squeeze(rgb_image, axis=0) 
 
-        return rgb_image
+        return rgb_image, [var1, var2, var3]
 
-    def get_labels(self, dataset):
+    def get_labels(self, dataset, label_name='cyclone'):
         """
         Extract and binarize the segmentation mask from the dataset.
         """
+        if label_name == 'cyclone':
+            mask_description = 1
+        elif label_name == 'river':
+            mask_description = 2
+        else:
+            raise ValueError(f"Unknown label name: {label_name}")
+            
         mask = dataset['LABELS'].values
-        mask = (mask == 1).astype(np.uint8)  # Convert to a binary mask.
+        mask = (mask == label_name).astype(np.uint8)  # Convert to a binary mask.
         # mask = np.ascontiguousarray(mask)
         # mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
         # print("Mask shape:", mask.shape)

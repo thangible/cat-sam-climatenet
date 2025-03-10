@@ -30,147 +30,14 @@ from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
 
+from train_util import parse, batch_to_cuda, calculate_dice_loss, plot_with_projection, worker_init_fn
+
+
+
 wandb.init(project="cat-sam-climatenet", config={
 
 })
 
-def plot_with_projection(image, mask, prediction, use_projection=False, batch_num=None, epoch=None):
-    # Convert tensors to numpy arrays
-    image_np = image.cpu().numpy().transpose(1, 2, 0)  # Convert to HWC format
-    mask_np = mask.cpu().numpy().squeeze()  # Remove channel dimension
-    prediction_np = prediction.detach().cpu().numpy().squeeze()  # Remove channel dimension
-
-    longitudes = np.linspace(-180, 180, image_np.shape[1])
-    latitudes = np.linspace(-90, 90, image_np.shape[0])
-
-    # Normalize image data to [0, 1] range for imshow
-    image_np = image_np / 255.0
-
-    # Create a figure
-    fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
-
-    # Plot the RGB image
-    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
-    ax.add_feature(cfeature.COASTLINE, edgecolor='black')
-
-    # Plot the mask and prediction contours
-    if mask_np.ndim == 3:
-        for i in range(mask_np.shape[0]):
-            ax.contour(longitudes, latitudes, mask_np[i], colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
-    else:
-        ax.contour(longitudes, latitudes, mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
-
-    if prediction_np.ndim == 3:
-        for i in range(prediction_np.shape[0]):
-            ax.contour(longitudes, latitudes, prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
-    else:
-        ax.contour(longitudes, latitudes, prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
-
-    # Add a legend
-    red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
-    green_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
-    plt.legend(handles=[red_path, green_path], loc='upper right')
-
-    # Add title and labels
-    plt.title('Map Projection with Ground Truth and Prediction')
-
-    # Save the plot to a file with epoch and batch number
-    filename = f'contour_plot_epoch_{epoch}_batch_{batch_num}.png'
-    plt.savefig(filename)
-    plt.close(fig)
-
-    # Log the image to wandb
-    wandb.log({"contour_plot": wandb.Image(filename, caption="Image with Mask and Prediction Contours")})
-
-
-def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
-    """
-    Compute the DICE loss, similar to generalized IOU for masks
-    Args:
-        inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
-        targets: A float tensor with the same shape as inputs. Stores the binary
-                 classification label for each element in inputs
-                (0 for the negative class and 1 for the positive class).
-    """
-    assert inputs.size(0) == targets.size(0)
-    inputs = inputs.sigmoid()
-    inputs, targets = inputs.flatten(1), targets.flatten(1)
-
-    numerator = 2 * (inputs * targets).sum(-1)
-    denominator = inputs.sum(-1) + targets.sum(-1)
-    loss = 1 - (numerator + 1) / (denominator + 1)
-    return loss.mean()
-
-
-def worker_init_fn(worker_id: int, base_seed: int, same_worker_seed: bool = True):
-    """
-    Set random seed for each worker in DataLoader to ensure the reproducibility.
-
-    """
-    seed = base_seed if same_worker_seed else base_seed + worker_id
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-
-
-def parse():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--exp_dir', default='./exp', type=str,
-        help="The directory to save the best checkpoint file. Default to be ./exp"
-    )
-    parser.add_argument(
-        '--data_dir', default='./data', type=str,
-        help="The directory that the datasets are placed. Default to be ./data"
-    )
-    parser.add_argument(
-        '--num_workers', default=None, type=int,
-        help="The num_workers argument used for the training and validation dataloaders. "
-             "Default to be 1 for one-shot and 4 for 16- and full-shot."
-    )
-    parser.add_argument(
-        '--train_bs', default=None, type=int,
-        help="The batch size for the training dataloader. Default to be 1 for one-shot and 4 for 16- and full-shot."
-    )
-    parser.add_argument(
-        '--val_bs', default=None, type=int,
-        help="The batch size for the validation dataloader. Default to be 1 for one-shot and 4 for 16- and full-shot."
-    )
-    parser.add_argument(
-        '--dataset', required=True, type=str, choices=['whu', 'sbu', 'kvasir', 'climate'],
-        help="Your target dataset. This argument is required."
-    )
-    parser.add_argument(
-        '--shot_num', default=None, type=int, choices=[1, 16],
-        help="The number of your target setting. For one-shot please give --shot_num 1. "
-             "For 16-shot please give --shot_num 16. For full-shot please leave it blank. "
-             "Default to be full-shot."
-    )
-    parser.add_argument(
-        '--sam_type', default='vit_l', type=str, choices=['vit_b', 'vit_l', 'vit_h'],
-        help='The type of the backbone SAM model. Default to be vit_l.'
-    )
-    parser.add_argument(
-        '--cat_type', required=True, type=str, choices=['cat-a', 'cat-t'],
-        help='The type of the CAT-SAM model. This argument is required.'
-    )
-    return parser.parse_args()
-
-
-def batch_to_cuda(batch, device):
-    for key in batch.keys():
-        if key in ['images', 'gt_masks', 'point_coords', 'box_coords', 'noisy_object_masks', 'object_masks']:
-            batch[key] = [
-                item.to(device=device, dtype=torch.float32) if item is not None else None for item in batch[key]
-            ]
-        elif key in ['point_labels']:
-            batch[key] = [
-                item.to(device=device, dtype=torch.long) if item is not None else None for item in batch[key]
-            ]
-    return batch
 
 def initialize_worker(worker_id, worker_args):
     set_randomness()
@@ -255,8 +122,10 @@ def initialize_model(worker_args, device, local_rank):
     return model
 
 def setup_optimizer_and_scheduler(model, worker_args):
+    lr = worker_args.lr if hasattr(worker_args, 'lr') else 1e-3
+    weight_decay = worker_args.weight_decay if hasattr(worker_args, 'weight_decay') else 1e-4
     optimizer = torch.optim.AdamW(
-        params=[p for p in model.parameters() if p.requires_grad], lr=1e-3, weight_decay=1e-4
+        params=[p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay
     )
     if worker_args.shot_num is None:
         max_epoch_num, valid_per_epochs = 50, 1
@@ -265,12 +134,213 @@ def setup_optimizer_and_scheduler(model, worker_args):
     elif worker_args.shot_num == 16:
         max_epoch_num, valid_per_epochs = 200, 2
     else:
-        raise RuntimeError
+        raise RuntimeError("Invalid shot number provided. Expected values are None, 1, or 16.")
+    
+    if worker_args.max_epoch_num:
+        max_epoch_num = worker_args.max_epoch_num
+        
+    if worker_args.valid_per_epochs:
+        valid_per_epochs = worker_args.valid_per_epochs
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=max_epoch_num, eta_min=1e-5
     )
     return optimizer, scheduler, max_epoch_num, valid_per_epochs
-                          
+
+
+
+
+def initialize_evaluator(worker_args, train_dataset):
+    if worker_args.dataset == 'hqseg44k':
+        return SamHQIoU()
+    else:
+        class_names = train_dataset.class_names if worker_args.dataset in ['jsrt', 'fls'] else ['Background', 'Foreground']
+        return StreamSegMetrics(class_names=class_names)
+
+
+def setup_experiment_path(worker_args):
+    return join(
+        worker_args.exp_dir,
+        f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
+    )
+
+
+def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num):
+    if hasattr(train_dataloader.sampler, 'set_epoch'):
+        train_dataloader.sampler.set_epoch(epoch)
+
+    train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
+    for train_step, batch in enumerate(train_dataloader):
+        batch = batch_to_cuda(batch, device)
+        masks_pred = model(
+            imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
+            box_coords=batch['box_coords'], noisy_masks=batch['noisy_object_masks']
+        )
+        masks_gt = batch['object_mask']
+        masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
+
+        total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
+        log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict)
+
+        backward_context = model.no_sync if torch.distributed.is_initialized() else nullcontext
+        with backward_context():
+            total_loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        reduce_losses(loss_dict)
+
+        if train_pbar:
+            update_progress_bar(train_pbar, epoch, max_epoch_num, loss_dict)
+
+    scheduler.step()
+    if train_pbar:
+        train_pbar.clear()
+
+
+def preprocess_masks(masks_pred, masks_gt):
+    for masks in [masks_pred, masks_gt]:
+        for i in range(len(masks)):
+            if len(masks[i].shape) == 2:
+                masks[i] = masks[i][None, None, :]
+            if len(masks[i].shape) == 3:
+                masks[i] = masks[i][:, None, :]
+            if len(masks[i].shape) != 4:
+                raise RuntimeError
+    return masks_pred, masks_gt
+
+
+def calculate_losses(masks_pred, masks_gt):
+    bce_loss_list, dice_loss_list = [], []
+    for i in range(len(masks_pred)):
+        pred, label = masks_pred[i], masks_gt[i]
+        label = torch.where(torch.gt(label, 0.), 1., 0.)
+        b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
+        d_loss = calculate_dice_loss(pred, label)
+
+        bce_loss_list.append(b_loss)
+        dice_loss_list.append(d_loss)
+
+    bce_loss = sum(bce_loss_list) / len(bce_loss_list)
+    dice_loss = sum(dice_loss_list) / len(dice_loss_list)
+    total_loss = bce_loss + dice_loss
+    loss_dict = dict(
+        total_loss=total_loss.clone().detach(),
+        bce_loss=bce_loss.clone().detach(),
+        dice_loss=dice_loss.clone().detach()
+    )
+    return total_loss, loss_dict
+
+
+def log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict):
+    with torch.no_grad():
+        pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
+        true_labels = masks_gt[0]
+        intersection = (pred_labels * true_labels).sum()
+        union = pred_labels.sum() + true_labels.sum() - intersection
+        iou = intersection / union if union != 0 else torch.tensor(0.0)
+        precision = intersection / pred_labels.sum() if pred_labels.sum() != 0 else torch.tensor(0.0)
+        recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
+        f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
+
+    wandb.log({
+        "epoch": epoch,
+        "train_step": train_step,
+        "iou": iou.item(),
+        "precision": precision.item(),
+        "recall": recall.item(),
+        "f1_score": f1_score.item(),
+        "total_loss": loss_dict['total_loss'].item(),
+        "bce_loss": loss_dict['bce_loss'].item(),
+        "dice_loss": loss_dict['dice_loss'].item()
+    })
+
+
+def reduce_losses(loss_dict):
+    if torch.distributed.is_initialized():
+        for key in loss_dict.keys():
+            if hasattr(loss_dict[key], 'detach'):
+                loss_dict[key] = loss_dict[key].detach()
+            torch.distributed.reduce(loss_dict[key], dst=0, op=torch.distributed.ReduceOp.SUM)
+            loss_dict[key] /= torch.distributed.get_world_size()
+
+
+def update_progress_bar(train_pbar, epoch, max_epoch_num, loss_dict):
+    train_pbar.update(1)
+    str_step_info = "Epoch: {epoch}/{epochs:4}. " \
+                    "Loss: {total_loss:.4f}(total), {bce_loss:.4f}(bce), {dice_loss:.4f}(dice)".format(
+        epoch=epoch, epochs=max_epoch_num,
+        total_loss=loss_dict['total_loss'], bce_loss=loss_dict['bce_loss'], dice_loss=loss_dict['dice_loss']
+    )
+    train_pbar.set_postfix_str(str_step_info)
+
+
+def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num):
+    model.eval()
+    valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
+    for val_step, batch in enumerate(val_dataloader):
+        batch = batch_to_cuda(batch, device)
+        val_model = model.module if hasattr(model, 'module') else model
+
+        with torch.no_grad():
+            val_model.set_infer_img(img=batch['images'])
+            masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
+
+        masks_gt = batch['gt_masks']
+        masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
+
+        iou_eval.update(masks_gt, masks_pred, batch['index_name'])
+        valid_pbar.update(1)
+        str_step_info = "Epoch: {epoch}/{epochs:4}.".format(epoch=epoch, epochs=max_epoch_num)
+        valid_pbar.set_postfix_str(str_step_info)
+
+        metrics = iou_eval.compute()
+        mean_iou = metrics[0]['Mean Foreground IoU']
+        mean_precision = metrics[0]['Mean Foreground Precision']
+        mean_recall = metrics[0]['Mean Foreground Recall']
+        mean_f1 = metrics[0]['Mean Foreground F1']
+        iou_eval.reset()
+        valid_pbar.clear()
+
+        wandb.log({
+            "epoch": epoch,
+            "val_step": val_step,
+            "mean_iou": mean_iou,
+            "mean_precision": mean_precision,
+            "mean_recall": mean_recall,
+            "mean_f1": mean_f1
+        })
+
+        if mean_iou > best_miou:
+            
+            if worker_args.save_model:
+                torch.save(
+                    model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
+                    join(exp_path, "best_model.pth")
+                )
+            best_miou = mean_iou
+            print(f'Best mIoU has been updated to {best_miou:.2%}!')
+            wandb.save(join(exp_path, "best_model.pth"))
+
+        log_images_to_wandb(batch, masks_pred, epoch, val_step)
+
+
+def log_images_to_wandb(batch, masks_pred, epoch, train_step):
+    wandb.log({
+        "Images type": str(type(batch['images'])),
+        "Images shape": [img.shape for img in batch['images'][:4]],
+        "Masks type": str(type(batch['gt_masks'])),
+        "Masks shape": [mask.shape for mask in batch['gt_masks'][:4]],
+        "Preds type": str(type(masks_pred)),
+        "Preds shape": [pred.shape for pred in masks_pred[:4]]
+    })
+
+    images = [img for img in batch['images'][:4]]
+    masks = [mask for mask in batch['gt_masks'][:4]]
+    preds = [pred for pred in masks_pred[:4]]
+
+    for i in range(len(images)):
+        plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
+        
+        
 def main_worker(worker_id, worker_args):
     worker_id = initialize_worker(worker_id, worker_args)
     device, local_rank = setup_device_and_distributed(worker_id, worker_args)
@@ -280,201 +350,15 @@ def main_worker(worker_id, worker_args):
     optimizer, scheduler, max_epoch_num, valid_per_epochs = setup_optimizer_and_scheduler(model, worker_args)
 
     best_miou = 0
-    if worker_args.dataset == 'hqseg44k':
-        iou_eval = SamHQIoU()
-    else:
-        if worker_args.dataset in ['jsrt', 'fls']:
-            class_names = train_dataset.class_names
-        else:
-            class_names = ['Background', 'Foreground']
-        iou_eval = StreamSegMetrics(class_names=class_names)
+    iou_eval = initialize_evaluator(worker_args, train_dataset)
 
-    exp_path = join(
-        worker_args.exp_dir,
-        f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
-    )
+    exp_path = setup_experiment_path(worker_args)
     os.makedirs(exp_path, exist_ok=True)
-    # checkpoint_files = glob.glob(os.path.join(worker_args.exp_dir, "**", "best_model.pth"), recursive=True)
 
-    # if checkpoint_files:
-    #     checkpoint_path = checkpoint_files[0]  # Load the first match found 
-    #     print(f"Loading pretrained weights from {checkpoint_path}...")
-    #     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    # else:
-    #     print("No checkpoint found, starting training from scratch.")
-    
     for epoch in range(1, max_epoch_num + 1):
-        if hasattr(train_dataloader.sampler, 'set_epoch'):
-            train_dataloader.sampler.set_epoch(epoch)
-
-        train_pbar = None
-        if local_rank == 0:
-            train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False)
-        for train_step, batch in enumerate(train_dataloader):
-            batch = batch_to_cuda(batch, device)
-            masks_pred = model(
-                imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
-                box_coords=batch['box_coords'], noisy_masks=batch['noisy_object_masks']
-            )
-            masks_gt = batch['object_masks']
-            for masks in [masks_pred, masks_gt]:
-                for i in range(len(masks)):
-                    if len(masks[i].shape) == 2:
-                        masks[i] = masks[i][None, None, :]
-                    if len(masks[i].shape) == 3:
-                        masks[i] = masks[i][:, None, :]
-                    if len(masks[i].shape) != 4:
-                        raise RuntimeError
-
-            bce_loss_list, dice_loss_list, focal_loss_list = [], [], []
-            for i in range(len(masks_pred)):
-                pred, label = masks_pred[i], masks_gt[i]
-                label = torch.where(torch.gt(label, 0.), 1., 0.)
-                b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
-                d_loss = calculate_dice_loss(pred, label)
-
-                bce_loss_list.append(b_loss)
-                dice_loss_list.append(d_loss)
-
-            bce_loss = sum(bce_loss_list) / len(bce_loss_list)
-            dice_loss = sum(dice_loss_list) / len(dice_loss_list)
-            total_loss = bce_loss + dice_loss
-            loss_dict = dict(
-                total_loss=total_loss.clone().detach(),
-                bce_loss=bce_loss.clone().detach(),
-                dice_loss=dice_loss.clone().detach()
-            )
-
-            # Log metrics to wandb
-            wandb.log({
-                "epoch": epoch,
-                "train_step": train_step,
-                "total_loss": loss_dict['total_loss'].item(),
-                "bce_loss": loss_dict['bce_loss'].item(),
-                "dice_loss": loss_dict['dice_loss'].item()
-            })
-
-
-            backward_context = nullcontext
-            if torch.distributed.is_initialized():
-                backward_context = model.no_sync
-            with backward_context():
-                total_loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            if torch.distributed.is_initialized():
-                for key in loss_dict.keys():
-                    if hasattr(loss_dict[key], 'detach'):
-                        loss_dict[key] = loss_dict[key].detach()
-                    torch.distributed.reduce(loss_dict[key], dst=0, op=torch.distributed.ReduceOp.SUM)
-                    loss_dict[key] /= torch.distributed.get_world_size()
-
-            if train_pbar:
-                train_pbar.update(1)
-                str_step_info = "Epoch: {epoch}/{epochs:4}. " \
-                                "Loss: {total_loss:.4f}(total), {bce_loss:.4f}(bce), {dice_loss:.4f}(dice)".format(
-                    epoch=epoch, epochs=max_epoch_num,
-                    total_loss=loss_dict['total_loss'], bce_loss=loss_dict['bce_loss'], dice_loss=loss_dict['dice_loss']
-                )
-                train_pbar.set_postfix_str(str_step_info)
-
-                
-            if epoch % 10 == 1 and train_step == 0:
-                # print("Before processing:")
-                # print("Images type:", type(batch['images']))
-                # print("Images shape:", [img.shape for img in batch['images'][:4]])
-                # print("Masks type:", type(batch['object_masks']))
-                # print("Masks shape:", [mask.shape for mask in batch['object_masks'][:4]])
-                # print("Preds type:", type(masks_pred))
-                # print("Preds shape:", [pred.shape for pred in masks_pred[:4]])
-                
-                # Convert images and masks to a grid
-                # Define the target size for resizing
-                target_size = (3, 256, 256)  # Example target size (channels, height, width)
-                # Resize images to the target size
-                images = [img for img in batch['images'][:4]]
-                masks = [mask for mask in batch['gt_masks'][:4]]
-                preds = [pred for pred in masks_pred[:4]]
-                
-                for i in range(len(images)):
-                    plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
-                
-        scheduler.step()
-        if train_pbar:
-            train_pbar.clear()
-
+        train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num)
         if local_rank == 0 and epoch % valid_per_epochs == 0:
-            model.eval()
-            valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
-            for val_step, batch in enumerate(val_dataloader):
-                batch = batch_to_cuda(batch, device)
-                val_model = model
-                if hasattr(model, 'module'):
-                    val_model = model.module
-
-                with torch.no_grad():
-                    val_model.set_infer_img(img=batch['images'])
-                    if worker_args.dataset == 'm_roads':
-                        masks_pred = val_model.infer(point_coords=batch['point_coords'])
-                    else:
-                        masks_pred = val_model.infer(box_coords=batch['box_coords'])
-
-                masks_gt = batch['gt_masks']
-                for masks in [masks_pred, masks_gt]:
-                    for i in range(len(masks)):
-                        if len(masks[i].shape) == 2:
-                            masks[i] = masks[i][None, None, :]
-                        if len(masks[i].shape) == 3:
-                            masks[i] = masks[i][None, :]
-                        if len(masks[i].shape) != 4:
-                            raise RuntimeError
-
-                iou_eval.update(masks_gt, masks_pred, batch['index_name'])
-                valid_pbar.update(1)
-                str_step_info = "Epoch: {epoch}/{epochs:4}.".format(
-                    epoch=epoch, epochs=max_epoch_num
-                )
-                valid_pbar.set_postfix_str(str_step_info)
-
-            miou = iou_eval.compute()[0]['Mean Foreground IoU']
-            iou_eval.reset()
-            valid_pbar.clear()
-
-            # Log validation metrics to wandb
-            wandb.log({
-                "epoch": epoch,
-                "miou": miou
-            })
-
-            if miou > best_miou:
-                torch.save(
-                    model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
-                    join(exp_path, "best_model.pth")
-                )
-                best_miou = miou
-                print(f'Best mIoU has been updated to {best_miou:.2%}!')
-
-                # Log model checkpoint to wandb
-                wandb.save(join(exp_path, "best_model.pth"))
-
-        # Save and log validation images with masks
-        if epoch % 10 == 0 and val_step == 0:
-            # Convert images and masks to a grid
-            images = batch['images'][:4].cpu()  # Take the first 4 images in the batch
-            masks = batch['gt_masks'][:4].cpu() if torch.is_tensor(batch['gt_masks'][0]) else torch.tensor(batch['gt_masks'][:4])
-            preds = masks_pred[:4].detach().cpu() if torch.is_tensor(masks_pred[0]) else torch.tensor(masks_pred[:4])
-
-            # Create a grid of images
-            img_grid = make_grid(images, nrow=4, normalize=True, scale_each=True)
-            mask_grid = make_grid(masks, nrow=4, normalize=True, scale_each=True)
-            pred_grid = make_grid(preds, nrow=4, normalize=True, scale_each=True)
-
-            # Log the grids to wandb
-            wandb.log({
-                "val_images": wandb.Image(img_grid, caption="Validation Images"),
-                "val_gt_masks": wandb.Image(mask_grid, caption="Ground Truth Masks"),
-                "val_pred_masks": wandb.Image(pred_grid, caption="Predicted Masks")
-            })
+            validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
 
 if __name__ == '__main__':
     args = parse()
