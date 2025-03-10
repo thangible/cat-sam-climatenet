@@ -263,6 +263,8 @@ def calculate_losses(masks_pred, masks_gt):
 
 
 def log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict):
+    # if epoch == 0 and train_step == 0:
+        
     with torch.no_grad():
         pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
         true_labels = masks_gt[0]
@@ -377,25 +379,28 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             print(f'Best mIoU has been updated to {best_miou:.2%}!')
             wandb.save(join(exp_path, "best_model.pth"))
         if worker_args.wandb:
-            log_images_to_wandb(batch, masks_pred, epoch, val_step)
+            log_images_to_wandb(batch, masks_pred, epoch, val_step, worker_args)
 
 
-def log_images_to_wandb(batch, masks_pred, epoch, train_step):
-    wandb.log({
-        "Images type": str(type(batch['images'])),
-        "Images shape": [img.shape for img in batch['images'][:4]],
-        "Masks type": str(type(batch['gt_masks'])),
-        "Masks shape": [mask.shape for mask in batch['gt_masks'][:4]],
-        "Preds type": str(type(masks_pred)),
-        "Preds shape": [pred.shape for pred in masks_pred[:4]]
-    })
+def log_images_to_wandb(batch, masks_pred, epoch, train_step, worker_args):
+    if worker_args.debugging:
+        wandb.log({
+            "Images type": str(type(batch['images'])),
+            "Images shape": [img.shape for img in batch['images'][:4]],
+            "Masks type": str(type(batch['gt_masks'])),
+            "Masks shape": [mask.shape for mask in batch['gt_masks'][:4]],
+            "Preds type": str(type(masks_pred)),
+            "Preds shape": [pred.shape for pred in masks_pred[:4]]
+        })
 
     images = [img for img in batch['images'][:4]]
     masks = [mask for mask in batch['gt_masks'][:4]]
     preds = [pred for pred in masks_pred[:4]]
+    label = [f"Image {i}" for i in batch['file_name'][:4]]
+    var_names = [variable for variable in batch['var_names'][:4]]
 
     for i in range(len(images)):
-        plot_with_projection(images[i], masks[i], preds[i], use_projection=True, batch_num=train_step, epoch=epoch)
+        plot_with_projection(images[i], masks[i], preds[i], label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch)
         
         
 def main_worker(worker_id, worker_args):

@@ -32,9 +32,7 @@ class ClimateDataset(Dataset):
         # Store prompt generation parameters.
         self.prompt_kwargs = prompt_kwargs
         
-        shot_num = prompt_kwargs.pop("shot_num", None)
-        if shot_num is not None:
-            self.files = self.files[:shot_num]
+        
         
 
     def __len__(self):
@@ -75,6 +73,7 @@ class ClimateDataset(Dataset):
         
         # Return a dictionary that matches the expected format.
         return {
+            "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension
             "images": rgb_image,  # should be in (H, W, 3) format as a numpy array.
             "gt_masks": mask,     # binary mask.
             "index_name": index_name,

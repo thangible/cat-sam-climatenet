@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-def plot_with_projection(image, mask, prediction, use_projection=False, batch_num=None, epoch=None):
+def plot_with_projection(image, mask, prediction, label, var_names, use_projection=False, batch_num=None, epoch=None):
     # Convert tensors to numpy arrays
     # Check if the image tensor needs to be transposed
     if image.ndim == 3 and image.shape[0] in [1, 3]:
@@ -30,7 +30,7 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
 
     # Plot the RGB image
-    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None)
+    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None, alpha = 0.7)
     ax.add_feature(cfeature.COASTLINE, edgecolor='black')
 
     # Plot the mask and prediction contours
@@ -52,15 +52,16 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
     plt.legend(handles=[red_path, green_path], loc='upper right')
 
     # Add title and labels
-    plt.title('Map Projection with Ground Truth and Prediction')
+    title = f'World projection with RGB as {var_names[0]}, {var_names[1]}, {var_names[2]} - Epoch {epoch} - {label}'
+    plt.title(title)
 
     # Save the plot to a file with epoch and batch number
-    filename = f'contour_plot_epoch_{epoch}_batch_{batch_num}.png'
+    filename = f'{label}_epoch_{epoch}.png'
     plt.savefig(filename)
     plt.close(fig)
 
     # Log the image to wandb
-    wandb.log({"contour_plot": wandb.Image(filename, caption="Image with Mask and Prediction Contours")})
+    wandb.log({"Validation example": wandb.Image(filename, caption=title)})
 
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
