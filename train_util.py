@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-def plot_with_projection(image, mask, prediction, label, var_names, use_projection=False, batch_num=None, epoch=None):
+def plot_with_projection(image, mask, prediction, label, var_names, use_projection=False, batch_num=None, epoch=None, title = None):
     # Convert tensors to numpy arrays
     # Check if the image tensor needs to be transposed
     if image.ndim == 3 and image.shape[0] in [1, 3]:
@@ -52,7 +52,10 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     plt.legend(handles=[red_path, green_path], loc='upper right')
 
     # Add title and labels
-    title = f'World projection with RGB as {var_names[0]}, {var_names[1]}, {var_names[2]} - Epoch {epoch} - {label}'
+    
+    if title is None:
+        title = f'World projection with RGB as {var_names[0]}, {var_names[1]}, {var_names[2]} - Epoch {epoch} - {label}'
+        
     plt.title(title)
 
     # Save the plot to a file with epoch and batch number
