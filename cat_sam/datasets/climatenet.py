@@ -30,8 +30,12 @@ class ClimateDataset(Dataset):
         self.transforms = Compose(transforms) if transforms else None
         
         # Store prompt generation parameters.
-        
         self.prompt_kwargs = prompt_kwargs
+        
+        shot_num = prompt_kwargs.pop("shot_num", None)
+        if shot_num is not None:
+            self.files = self.files[:shot_num]
+        
 
     def __len__(self):
         return len(self.files)
@@ -63,7 +67,6 @@ class ClimateDataset(Dataset):
             rgb_image, mask = transformed["image"], transformed["mask"]
         
         # Generate prompts (point, box, and noisy masks).
-        shot_num = prompt_kwargs.pop("shot_num", None)
         point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
             gt_mask=mask,
             tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],

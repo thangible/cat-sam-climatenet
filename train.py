@@ -150,7 +150,7 @@ def setup_optimizer_and_scheduler(model, worker_args):
     if worker_args.shot_num is None:
         max_epoch_num, valid_per_epochs = 50, 1
     elif worker_args.shot_num == 1:
-        raise RuntimeError(f"Invalid shot number provided: {worker_args.shot_num}. Expected values are None, 1, or 16.")
+        max_epoch_num, valid_per_epochs = 2000, 20
     elif worker_args.shot_num == 16:
         max_epoch_num, valid_per_epochs = 200, 2
     else:
@@ -305,6 +305,22 @@ def update_progress_bar(train_pbar, epoch, max_epoch_num, loss_dict):
 
 
 def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num):
+
+    """
+    Validate the model for one epoch.
+    Args:
+        epoch (int): The current epoch number.
+        val_dataloader (DataLoader): DataLoader for the validation dataset.
+        model (torch.nn.Module): The model to be validated.
+        iou_eval (IoUEval): An instance of IoU evaluation class.
+        device (torch.device): The device to run the validation on (CPU or GPU).
+        exp_path (str): The path to save the best model.
+        best_miou (float): The best mean Intersection over Union (mIoU) achieved so far.
+        worker_args (Namespace): Additional arguments including dataset type and whether to save the model.
+        max_epoch_num (int): The maximum number of epochs.
+    Returns:
+        float: The updated best mean IoU after validation.
+    """
     model.eval()
     valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
     for val_step, batch in enumerate(val_dataloader):
@@ -324,10 +340,18 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         valid_pbar.set_postfix_str(str_step_info)
 
         metrics = iou_eval.compute()
-        mean_iou = metrics[0]['Mean Foreground IoU']
-        mean_precision = metrics[0]['Mean Foreground Precision']
-        mean_recall = metrics[0]['Mean Foreground Recall']
-        mean_f1 = metrics[0]['Mean Foreground F1']
+        results_dict, _ = metrics.compute()
+            # Metrics:
+    #     mean_iou (float): The mean Intersection over Union (IoU) across all classes.
+    #     mean_acc (float): The mean accuracy across all classes.
+    #     overall_acc (float): The overall accuracy across all classes.
+    #     freqw_acc (float): The frequency weighted accuracy across all classes.
+    #     mean_fg_iou (float): The mean IoU for foreground classes.
+        mean_iou = results_dict['Mean IoU']
+        mean_acc = results_dict['Mean Acc']
+        overall_acc = results_dict['Overall Acc']
+        freqw_acc = results_dict['FreqW Acc']
+        mean_fg_iou = results_dict['Mean Foreground IoU']
         iou_eval.reset()
         valid_pbar.clear()
 
@@ -335,9 +359,10 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             "epoch": epoch,
             "val_step": val_step,
             "mean_iou": mean_iou,
-            "mean_precision": mean_precision,
-            "mean_recall": mean_recall,
-            "mean_f1": mean_f1
+            "mean_acc": mean_acc,
+            "overall_acc": overall_acc,
+            "freqw_acc": freqw_acc,
+            "mean_fg_iou": mean_fg_iou
         })
 
         if mean_iou > best_miou:
