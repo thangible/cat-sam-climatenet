@@ -17,8 +17,8 @@ def plot_with_projection(image, mask, prediction, use_projection=False, batch_nu
         image_np = image.cpu().numpy().transpose(1, 2, 0)  # Convert to HWC format
     else:
         image_np = image.cpu().numpy()
-    mask_np = mask.cpu().numpy().squeeze()  # Remove channel dimension
-    prediction_np = prediction.detach().cpu().numpy().squeeze()  # Remove channel dimension
+    mask_np = mask.cpu().numpy().squeeze() if torch.is_tensor(mask) else mask.squeeze()  # Remove channel dimension
+    prediction_np = prediction.detach().cpu().numpy().squeeze() if torch.is_tensor(prediction) else prediction.squeeze()  # Remove channel dimension
 
     longitudes = np.linspace(-180, 180, image_np.shape[1])
     latitudes = np.linspace(-90, 90, image_np.shape[0])
