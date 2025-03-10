@@ -194,7 +194,7 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
         # Debugging: Print available keys in the batch
         if local_rank == 0 and train_step == 0:
             print(f"Batch keys: {batch.keys()}")
-        if 'object_mask' not in batch: # Check if 'object_mask' key is available
+        if 'object_masks' not in batch: # Check if 'object_mask' key is available
             raise KeyError("The key 'object_mask' is missing from the batch. Available keys are: {}".format(batch.keys()))
         for key, value in batch.items():
             print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
