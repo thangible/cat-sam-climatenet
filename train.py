@@ -208,7 +208,8 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
 
         total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
-        log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict)
+        if worker_args.wandb:
+            log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict)
 
         backward_context = model.no_sync if torch.distributed.is_initialized() else nullcontext
         with backward_context():
@@ -348,8 +349,8 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             best_miou = mean_iou
             print(f'Best mIoU has been updated to {best_miou:.2%}!')
             wandb.save(join(exp_path, "best_model.pth"))
-
-        log_images_to_wandb(batch, masks_pred, epoch, val_step)
+        if worker_args.wandb:
+            log_images_to_wandb(batch, masks_pred, epoch, val_step)
 
 
 def log_images_to_wandb(batch, masks_pred, epoch, train_step):
