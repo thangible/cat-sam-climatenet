@@ -34,7 +34,8 @@ from train_util import parse, batch_to_cuda, calculate_dice_loss, plot_with_proj
 
 
 
-
+# Disable deterministic algorithms
+torch.use_deterministic_algorithms(False)
 
 def initialize_worker(worker_id, worker_args):
     set_randomness()
@@ -341,12 +342,12 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
 
         metrics = iou_eval.compute()
         results_dict, _ = metrics
-            # Metrics:
-    #     mean_iou (float): The mean Intersection over Union (IoU) across all classes.
-    #     mean_acc (float): The mean accuracy across all classes.
-    #     overall_acc (float): The overall accuracy across all classes.
-    #     freqw_acc (float): The frequency weighted accuracy across all classes.
-    #     mean_fg_iou (float): The mean IoU for foreground classes.
+        # Metrics:
+        #     mean_iou (float): The mean Intersection over Union (IoU) across all classes.
+        #     mean_acc (float): The mean accuracy across all classes.
+        #     overall_acc (float): The overall accuracy across all classes.
+        #     freqw_acc (float): The frequency weighted accuracy across all classes.
+        #     mean_fg_iou (float): The mean IoU for foreground classes.
         mean_iou = results_dict['Mean IoU']
         mean_acc = results_dict['Mean Acc']
         overall_acc = results_dict['Overall Acc']
