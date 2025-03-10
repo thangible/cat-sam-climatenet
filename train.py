@@ -190,25 +190,16 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
 
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
-        if train_step == 0:
+        if train_step ==0: 
             if worker_args.shot_num == 1:
-                images = [batch['images'][0]]
-                masks = [batch['gt_masks'][0]]
-                preds = [masks_pred[0]]
-                label = [f"Image {batch['file_name'][0]}"]
-                var_names = [batch['var_names'][0]]
-            elif worker_args.shot_num == 16:
-                images = [img for img in batch['images'][:16]]
-                masks = [mask for mask in batch['gt_masks'][:16]]
-                preds = [pred for pred in masks_pred[:16]]
-                label = [f"Image {i}" for i in batch['file_name'][:16]]
-                var_names = [variable for variable in batch['var_names'][:16]]
-            else:
-                break
-            for i in range(len(images)):
-                plot_with_projection(images[i], masks[i], preds[i], label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch, title="train images")
-            batch = batch_to_cuda(batch, device)
-        
+                img = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
+                wandb.log({"first_image": [wandb.Image(img, caption="Training Image")]})
+                
+            if worker_args.shot_num == 16:
+                for i, img in enumerate(batch['images']):
+                    img_np = img.cpu().numpy().transpose(1, 2, 0)
+                    wandb.log({f"image_{i}": [wandb.Image(img_np, caption=f"Image {i} in Training Image")]})
+            
         if worker_args.debugging:
             # Debugging: Print available keys in the batch
             if local_rank == 0 and train_step == 0:
