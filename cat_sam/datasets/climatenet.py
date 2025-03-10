@@ -54,9 +54,8 @@ class ClimateDataset(Dataset):
         rgb_image, [var1, var2, var3] = self.to_image(dataset)  # see function below
         
         # Generate the binary mask from the dataset.
-        prompt_kwargs.pop("climatenet_label", 'cyclone')
-        
-        mask = self.get_labels(dataset)  # see function below
+        climatenet_label = prompt_kwargs.pop("climatenet_label", 'cyclone')
+        mask = self.get_labels(dataset, label_name=climatenet_label)  # see function below
         
         # Apply optional transforms.
         if self.transforms is not None:
@@ -64,7 +63,7 @@ class ClimateDataset(Dataset):
             rgb_image, mask = transformed["image"], transformed["mask"]
         
         # Generate prompts (point, box, and noisy masks).
-        prompt_kwargs.pop("shot_num", None)
+        shot_num = prompt_kwargs.pop("shot_num", None)
         point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
             gt_mask=mask,
             tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],

@@ -159,7 +159,10 @@ def parse():
         '--save_model', action='store_true',
         help="Flag to save the best model. Default is False."
     )
-    
+    parser.add_argument(
+        '--valid_per_epochs', default=1, type=int,
+        help="Validation frequency in terms of epochs. Default is 1."
+    )
     args = parser.parse_args()
 
     # Custom validation

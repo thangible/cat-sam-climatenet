@@ -122,6 +122,25 @@ def initialize_model(worker_args, device, local_rank):
     return model
 
 def setup_optimizer_and_scheduler(model, worker_args):
+    """
+    Sets up the optimizer and learning rate scheduler for the given model based on the provided worker arguments.
+    Args:
+        model (torch.nn.Module): The model whose parameters will be optimized.
+        worker_args (Namespace): A namespace containing the following optional attributes:
+            - lr (float): Learning rate for the optimizer. Default is 1e-3.
+            - weight_decay (float): Weight decay for the optimizer. Default is 1e-4.
+            - shot_num (int): Number of shots for training. Expected values are None, 1, or 16.
+            - max_epoch_num (int): Maximum number of epochs for training. Overrides default based on shot_num.
+            - valid_per_epochs (int): Frequency of validation per epochs. Overrides default based on shot_num.
+    Returns:
+        tuple: A tuple containing:
+            - optimizer (torch.optim.Optimizer): The configured optimizer.
+            - scheduler (torch.optim.lr_scheduler._LRScheduler): The configured learning rate scheduler.
+            - max_epoch_num (int): The maximum number of epochs for training.
+            - valid_per_epochs (int): The frequency of validation per epochs.
+    Raises:
+        RuntimeError: If an invalid shot number is provided.
+    """
     lr = worker_args.lr if hasattr(worker_args, 'lr') else 1e-3
     weight_decay = worker_args.weight_decay if hasattr(worker_args, 'weight_decay') else 1e-4
     optimizer = torch.optim.AdamW(
@@ -138,7 +157,6 @@ def setup_optimizer_and_scheduler(model, worker_args):
     
     if worker_args.max_epoch_num:
         max_epoch_num = worker_args.max_epoch_num
-        
     if worker_args.valid_per_epochs:
         valid_per_epochs = worker_args.valid_per_epochs
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
