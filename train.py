@@ -113,13 +113,13 @@ def initialize_model(worker_args, device, local_rank):
     model = model_class(model_type=worker_args.sam_type).to(device=device)
     if torch.distributed.is_initialized():
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = torch.nn.parallel.DistributedDataParallel(
-            try:
+        try:
+            model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
-            except Exception as e:
-                print(f"Error initializing DistributedDataParallel: {e}")
-                model = model.to(device=device)
-        )
+            )
+        except Exception as e:
+            print(f"Error initializing DistributedDataParallel: {e}")
+            model = model.to(device=device)
     return model
 
 def setup_optimizer_and_scheduler(model, worker_args):
