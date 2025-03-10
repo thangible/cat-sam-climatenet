@@ -34,8 +34,8 @@ from train_util import parse, batch_to_cuda, calculate_dice_loss, plot_with_proj
 
 
 
-# Disable deterministic algorithms
-torch.use_deterministic_algorithms(False)
+torch.use_deterministic_algorithms(True, warn_only=True)
+
 
 def initialize_worker(worker_id, worker_args):
     set_randomness()
