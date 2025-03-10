@@ -46,7 +46,7 @@ def setup_device_and_distributed(worker_id, worker_args):
     gpu_num = len(worker_args.used_gpu)
     world_size = os.environ['WORLD_SIZE'] if 'WORLD_SIZE' in os.environ.keys() else gpu_num
     base_rank = os.environ['RANK'] if 'RANK' in os.environ.keys() else 0
-    local_rank = base_rank * gpu_num + worker_id
+    local_rank = (base_rank * gpu_num) + worker_id
     if gpu_num > 1:
         dist.init_process_group(backend='nccl', init_method=worker_args.dist_url,
                                 world_size=world_size, rank=local_rank)
@@ -114,7 +114,11 @@ def initialize_model(worker_args, device, local_rank):
     if torch.distributed.is_initialized():
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
+            try:
+                model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
+            except Exception as e:
+                print(f"Error initializing DistributedDataParallel: {e}")
+                model = model.to(device=device)
         )
     return model
 
@@ -146,7 +150,7 @@ def setup_optimizer_and_scheduler(model, worker_args):
     if worker_args.shot_num is None:
         max_epoch_num, valid_per_epochs = 50, 1
     elif worker_args.shot_num == 1:
-        max_epoch_num, valid_per_epochs = 2000, 20
+        raise RuntimeError(f"Invalid shot number provided: {worker_args.shot_num}. Expected values are None, 1, or 16.")
     elif worker_args.shot_num == 16:
         max_epoch_num, valid_per_epochs = 200, 2
     else:
@@ -186,6 +190,16 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
         batch = batch_to_cuda(batch, device)
+        
+        # Debugging: Print available keys in the batch
+        if local_rank == 0 and train_step == 0:
+            print(f"Batch keys: {batch.keys()}")
+        if 'object_mask' not in batch: # Check if 'object_mask' key is available
+            raise KeyError("The key 'object_mask' is missing from the batch. Available keys are: {}".format(batch.keys()))
+        for key, value in batch.items():
+            print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
+
+
         masks_pred = model(
             imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
             box_coords=batch['box_coords'], noisy_masks=batch['noisy_object_masks']
@@ -219,7 +233,7 @@ def preprocess_masks(masks_pred, masks_gt):
             if len(masks[i].shape) == 3:
                 masks[i] = masks[i][:, None, :]
             if len(masks[i].shape) != 4:
-                raise RuntimeError
+                raise RuntimeError(f"Unexpected mask shape: {masks[i].shape}. Expected a 4D tensor.")
     return masks_pred, masks_gt
 
 
