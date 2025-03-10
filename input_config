@@ -18,7 +18,7 @@ sam_type = vit_l
 cat_type = cat-a
 
 [TRAINING LOOP]
-shot_num = 1
+; shot_num = 1
 ; max_epoch_num = 50
 ; valid_per_epochs = 2
 

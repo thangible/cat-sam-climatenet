@@ -340,7 +340,7 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         valid_pbar.set_postfix_str(str_step_info)
 
         metrics = iou_eval.compute()
-        results_dict, _ = metrics.compute()
+        results_dict, _ = metrics
             # Metrics:
     #     mean_iou (float): The mean Intersection over Union (IoU) across all classes.
     #     mean_acc (float): The mean accuracy across all classes.
