@@ -204,7 +204,7 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
             imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
             box_coords=batch['box_coords'], noisy_masks=batch['noisy_object_masks']
         )
-        masks_gt = batch['object_mask']
+        masks_gt = batch['object_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
 
         total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
