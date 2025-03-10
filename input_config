@@ -14,10 +14,13 @@ lr = 1e-3
 weight_decay = 1e-4
 save_model = False
 valid_per_epochs = 1
-wandb = False
+wandb = True
 project_name = cat-sam-climatenet
 run_name = test
 
 [climate]
 dataset = climate
 climatenet_label = cyclone
+
+[DEBUGGING]
+debugging = False

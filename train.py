@@ -191,13 +191,14 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
     for train_step, batch in enumerate(train_dataloader):
         batch = batch_to_cuda(batch, device)
         
-        # Debugging: Print available keys in the batch
-        if local_rank == 0 and train_step == 0:
-            print(f"Batch keys: {batch.keys()}")
-        if 'object_masks' not in batch: # Check if 'object_mask' key is available
-            raise KeyError("The key 'object_mask' is missing from the batch. Available keys are: {}".format(batch.keys()))
-        for key, value in batch.items():
-            print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
+        if worker_args.debugging:
+            # Debugging: Print available keys in the batch
+            if local_rank == 0 and train_step == 0:
+                print(f"Batch keys: {batch.keys()}")
+            if 'object_masks' not in batch:  # Check if 'object_masks' key is available
+                raise KeyError("The key 'object_masks' is missing from the batch. Available keys are: {}".format(batch.keys()))
+            for key, value in batch.items():
+                print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
 
 
         masks_pred = model(

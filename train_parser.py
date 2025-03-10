@@ -84,6 +84,10 @@ def parse():
         '--run_name', type=str,
         help="Run name for Weights & Biases logging."
     )
+    parser.add_argument(
+        '--debugging', action='store_true',
+        help="Flag to enable debugging mode. Default is False."
+    )
 
     args = parser.parse_args()
 
