@@ -191,7 +191,7 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
         if train_step == 0:
-            if worker_args.shot_num == 0:
+            if worker_args.shot_num == 1:
                 images = [batch['images'][0]]
                 masks = [batch['gt_masks'][0]]
                 preds = [masks_pred[0]]

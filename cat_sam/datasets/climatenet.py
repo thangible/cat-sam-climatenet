@@ -32,6 +32,10 @@ class ClimateDataset(Dataset):
         # Store prompt generation parameters.
         self.prompt_kwargs = prompt_kwargs
         
+        shot_num = prompt_kwargs.pop("shot_num", None)
+        if shot_num is not None:
+            self.files = self.files[:shot_num]
+        
         
         
 
