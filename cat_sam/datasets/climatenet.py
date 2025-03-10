@@ -122,7 +122,7 @@ class ClimateDataset(Dataset):
             raise ValueError(f"Unknown label name: {label_name}")
             
         mask = dataset['LABELS'].values
-        mask = (mask == label_name).astype(np.uint8)  # Convert to a binary mask.
+        mask = (mask == mask_description).astype(np.uint8)  # Convert to a binary mask.
         # mask = np.ascontiguousarray(mask)
         # mask = cv2.UMat(mask)  # Ensure the mask is a numpy array
         # print("Mask shape:", mask.shape)

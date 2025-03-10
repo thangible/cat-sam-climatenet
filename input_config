@@ -1,0 +1,23 @@
+[DEFAULT]
+exp_dir = ./exp
+data_dir = ./data
+num_workers = 4
+train_bs = 4
+val_bs = 4
+dataset = whu
+shot_num = 16
+sam_type = vit_l
+cat_type = cat-a
+climatenet_label = cyclone
+max_epoch_num = 50
+lr = 1e-3
+weight_decay = 1e-4
+save_model = False
+valid_per_epochs = 1
+wandb = False
+project_name = cat-sam-climatenet
+run_name = test
+
+[climate]
+dataset = climate
+climatenet_label = cyclone

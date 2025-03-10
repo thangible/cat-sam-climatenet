@@ -34,9 +34,6 @@ from train_util import parse, batch_to_cuda, calculate_dice_loss, plot_with_proj
 
 
 
-wandb.init(project="cat-sam-climatenet", config={
-
-})
 
 
 def initialize_worker(worker_id, worker_args):
@@ -380,6 +377,12 @@ def main_worker(worker_id, worker_args):
 
 if __name__ == '__main__':
     args = parse()
+    
+    if hasattr(args, 'wandb') and args.wandb:
+        project_name = args.project_name if hasattr(args, 'project_name') else "cat-sam-climatenet"
+        run_name = args.run_name if hasattr(args, 'run_name') else None
+        wandb.init(project=project_name, name=run_name, config=vars(args))
+
 
     if torch.cuda.is_available():
         if 'CUDA_VISIBLE_DEVICES' in os.environ.keys():

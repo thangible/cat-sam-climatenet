@@ -9,3 +9,4 @@ torch==1.13.1
 torchvision==0.14.1
 tqdm==4.66.1
 xarray==2024.7.0
+ConfigArgParse==1.5.3
