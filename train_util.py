@@ -23,8 +23,8 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     longitudes = np.linspace(-180, 180, image_np.shape[1])
     latitudes = np.linspace(-90, 90, image_np.shape[0])
 
-    # # Normalize image data to [0, 1] range for imshow
-    # image_np = image_np / 255.0
+    # Normalize image data to [0, 1] range for imshow
+    image_np = image_np / 255.0
 
     # Create a figure
     fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
