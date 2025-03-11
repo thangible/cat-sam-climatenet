@@ -18,7 +18,8 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     else:
         image_np = image.cpu().numpy()
     mask_np = mask.cpu().numpy().squeeze() if torch.is_tensor(mask) else mask.squeeze()  # Remove channel dimension
-    prediction_np = prediction.detach().cpu().numpy().squeeze() if prediction is not None and torch.is_tensor(prediction) else None  # Remove channel dimension
+    if prediction is not None:
+        prediction = prediction.detach().cpu().numpy().squeeze() if torch.is_tensor(prediction) else prediction.squeeze()
 
     longitudes = np.linspace(-180, 180, image_np.shape[1])
     latitudes = np.linspace(-90, 90, image_np.shape[0])
@@ -41,18 +42,18 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
         ax.contour(longitudes, latitudes, mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     # Plot the prediction contours if prediction is not None
-    if prediction_np is not None:
-        if prediction_np.ndim == 3:
+    if prediction is not None:
+        if prediction.ndim == 3:
             for i in range(prediction_np.shape[0]):
-                ax.contour(longitudes, latitudes, prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+                ax.contour(longitudes, latitudes, prediction[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
         else:
-            ax.contour(longitudes, latitudes, prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+            ax.contour(longitudes, latitudes, prediction, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     # Add a legend
-    if prediction_np is not None:
+    if prediction is not None:
         red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
     green_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
-    if prediction_np is not None:
+    if prediction is not None:
         plt.legend(handles=[red_path, green_path], loc='upper right')
     else:
         plt.legend(handles=[green_path], loc='upper right')
