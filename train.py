@@ -194,8 +194,8 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
         
         if train_step ==0: 
             if worker_args.shot_num == 1:
-                img = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
-                gt = batch['gt_masks'][0].cpu().numpy()
+                img = batch['images'][0]
+                gt = batch['gt_masks'][0]
                 label = batch['file_name'][0]
                 var_names = batch['var_names'][0]
                 plot_array, title = plot_with_projection(img, gt, None, label, var_names, use_projection=True, batch_num=train_step, epoch=epoch)
@@ -206,12 +206,12 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
             if worker_args.shot_num == 16:
                 images = [img for img in batch['images'][:4]]
                 masks = [mask for mask in batch['gt_masks'][:4]]
-                preds = [pred for pred in masks_pred[:4]]
+                # preds = [pred for pred in masks_pred[:4]]
                 label = [f"Image {i}" for i in batch['file_name'][:4]]
                 var_names = [variable for variable in batch['var_names'][:4]]
 
                 for i in range(len(images)):
-                    plot_array, title = plot_with_projection(images[i], masks[i], preds[i], label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch)
+                    plot_array, title = plot_with_projection(images[i], masks[i], None, label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch)
                     # Log the image to wandb
                     wandb.log({"Training examples": wandb.Image(plot_array, caption=title)})
             
