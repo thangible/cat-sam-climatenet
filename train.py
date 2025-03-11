@@ -192,7 +192,7 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
     for train_step, batch in enumerate(train_dataloader):
         batch = batch_to_cuda(batch, device)
         
-        if train_step ==0: 
+        if epoch ==0: 
             if worker_args.shot_num == 1:
                 img = batch['images'][0]
                 gt = batch['gt_masks'][0]
