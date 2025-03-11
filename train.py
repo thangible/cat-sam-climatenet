@@ -341,13 +341,21 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         with torch.no_grad():
             val_model.set_infer_img(img=batch['images'])
             masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
-
-            
+        
+        with torch.no_grad():
+            _, loss_dict = calculate_losses(masks_pred, masks_gt)
+            pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
+            true_labels = masks_gt[0]
+            intersection = (pred_labels * true_labels).sum()
+            union = pred_labels.sum() + true_labels.sum() - intersection
+            iou = intersection / union if union != 0 else torch.tensor(0.0)
+            precision = intersection / pred_labels.sum() if pred_labels.sum() != 0 else torch.tensor(0.0)
+            recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
 
         masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
-        total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
-
+        
         iou_eval.update(masks_gt, masks_pred, batch['index_name'])
         valid_pbar.update(1)
         str_step_info = "Epoch: {epoch}/{epochs:4}.".format(epoch=epoch, epochs=max_epoch_num)
@@ -369,15 +377,8 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         iou_eval.reset()
         valid_pbar.clear()
         
-        with torch.no_grad():
-            pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
-            true_labels = masks_gt[0]
-            intersection = (pred_labels * true_labels).sum()
-            union = pred_labels.sum() + true_labels.sum() - intersection
-            iou = intersection / union if union != 0 else torch.tensor(0.0)
-            precision = intersection / pred_labels.sum() if pred_labels.sum() != 0 else torch.tensor(0.0)
-            recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
-            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
+        
+        
 
         wandb.log({
             "epoch": epoch,
