@@ -190,15 +190,17 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
 
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
-        # if train_step ==0: 
-        #     if worker_args.shot_num == 1:
-        #         img = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
-        #         wandb.log({"first_image": [wandb.Image(img, caption="Training Image")]})
+        batch = batch_to_cuda(batch, device)
+        
+        if train_step ==0: 
+            if worker_args.shot_num == 1:
+                img = batch['images'][0].cpu().numpy().transpose(1, 2, 0)
+                wandb.log({"first_image": [wandb.Image(img, caption="Training Image")]})
                 
-        #     if worker_args.shot_num == 16:
-        #         for i, img in enumerate(batch['images']):
-        #             img_np = img.cpu().numpy().transpose(1, 2, 0)
-        #             wandb.log({f"image_{i}": [wandb.Image(img_np, caption=f"Image {i} in Training Image")]})
+            if worker_args.shot_num == 16:
+                for i, img in enumerate(batch['images']):
+                    img_np = img.cpu().numpy().transpose(1, 2, 0)
+                    wandb.log({f"image_{i}": [wandb.Image(img_np, caption=f"Image {i} in Training Image")]})
             
         if worker_args.debugging:
             # Debugging: Print available keys in the batch

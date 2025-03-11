@@ -15,7 +15,7 @@ run_name = test
 
 [MODEL CONFIG]
 sam_type = vit_l
-cat_type = cat-a
+; cat_type = cat-a
 
 [TRAINING LOOP]
 ; shot_num = 1

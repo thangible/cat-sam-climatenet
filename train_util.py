@@ -60,8 +60,8 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
 
     # Save the plot to a file with epoch and batch number
     filename = f'{label}_epoch_{epoch}.png'
-    plt.savefig(filename)
-    plt.close(fig)
+    # plt.savefig(filename)
+    # plt.close(fig)
 
     # Log the image to wandb
     wandb.log({"Validation example": wandb.Image(filename, caption=title)})
