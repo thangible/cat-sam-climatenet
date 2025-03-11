@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-def plot_with_projection(image, mask, prediction, label, var_names, use_projection=False, batch_num=None, epoch=None, title = None):
+def plot_with_projection(image, mask, prediction, label, var_names, use_projection=False, batch_num=None, epoch=None, title=None):
     # Convert tensors to numpy arrays
     # Check if the image tensor needs to be transposed
     if image.ndim == 3 and image.shape[0] in [1, 3]:
@@ -18,7 +18,7 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     else:
         image_np = image.cpu().numpy()
     mask_np = mask.cpu().numpy().squeeze() if torch.is_tensor(mask) else mask.squeeze()  # Remove channel dimension
-    prediction_np = prediction.detach().cpu().numpy().squeeze() if torch.is_tensor(prediction) else prediction.squeeze()  # Remove channel dimension
+    prediction_np = prediction.detach().cpu().numpy().squeeze() if prediction is not None and torch.is_tensor(prediction) else None  # Remove channel dimension
 
     longitudes = np.linspace(-180, 180, image_np.shape[1])
     latitudes = np.linspace(-90, 90, image_np.shape[0])
@@ -30,29 +30,34 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
 
     # Plot the RGB image
-    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None, alpha = 0.7)
+    ax.imshow(image_np, origin='upper', extent=[-180, 180, -90, 90] if use_projection else None, alpha=0.7)
     ax.add_feature(cfeature.COASTLINE, edgecolor='black')
 
-    # Plot the mask and prediction contours
+    # Plot the mask contours
     if mask_np.ndim == 3:
         for i in range(mask_np.shape[0]):
             ax.contour(longitudes, latitudes, mask_np[i], colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
     else:
         ax.contour(longitudes, latitudes, mask_np, colors='green', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
-    if prediction_np.ndim == 3:
-        for i in range(prediction_np.shape[0]):
-            ax.contour(longitudes, latitudes, prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
-    else:
-        ax.contour(longitudes, latitudes, prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+    # Plot the prediction contours if prediction is not None
+    if prediction_np is not None:
+        if prediction_np.ndim == 3:
+            for i in range(prediction_np.shape[0]):
+                ax.contour(longitudes, latitudes, prediction_np[i], colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
+        else:
+            ax.contour(longitudes, latitudes, prediction_np, colors='red', linewidths=1, levels=[0.5], transform=ccrs.PlateCarree() if use_projection else None)
 
     # Add a legend
-    red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
+    if prediction_np is not None:
+        red_path = plt.Line2D([0], [0], color='red', linewidth=1, label='Prediction')
     green_path = plt.Line2D([0], [0], color='green', linewidth=1, label='Ground Truth')
-    plt.legend(handles=[red_path, green_path], loc='upper right')
+    if prediction_np is not None:
+        plt.legend(handles=[red_path, green_path], loc='upper right')
+    else:
+        plt.legend(handles=[green_path], loc='upper right')
 
     # Add title and labels
-    
     if title is None:
         title = f'World projection with RGB as {var_names[0]}, {var_names[1]}, {var_names[2]} - Epoch {epoch} - {label}'
         
@@ -62,10 +67,10 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     plot_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     plot_array = plot_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     plt.close(fig)
+    
+    return plot_array, title
 
-    # Log the image to wandb
-    wandb.log({"Validation example": wandb.Image(plot_array, caption=title)})
-
+   
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
     """

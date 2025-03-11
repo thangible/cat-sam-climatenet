@@ -114,7 +114,7 @@ class ClimateDataset(Dataset):
         if rgb_image.shape[0] == 1:
             rgb_image = np.squeeze(rgb_image, axis=0) 
 
-        return rgb_image, [var1, var2, var3]
+        return rgb_image, [var_1, var_2, var_3]
 
     def get_labels(self, dataset, label_name='cyclone'):
         """
