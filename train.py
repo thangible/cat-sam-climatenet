@@ -288,23 +288,8 @@ def calculate_losses(masks_pred, masks_gt):
 def log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict):
     # if epoch == 0 and train_step == 0:
         
-    with torch.no_grad():
-        pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
-        true_labels = masks_gt[0]
-        intersection = (pred_labels * true_labels).sum()
-        union = pred_labels.sum() + true_labels.sum() - intersection
-        iou = intersection / union if union != 0 else torch.tensor(0.0)
-        precision = intersection / pred_labels.sum() if pred_labels.sum() != 0 else torch.tensor(0.0)
-        recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
-        f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
-
     wandb.log({
         "epoch": epoch,
-        "train_step": train_step,
-        "iou": iou.item(),
-        "precision": precision.item(),
-        "recall": recall.item(),
-        "f1_score": f1_score.item(),
         "total_loss": loss_dict['total_loss'].item(),
         "bce_loss": loss_dict['bce_loss'].item(),
         "dice_loss": loss_dict['dice_loss'].item()
@@ -357,8 +342,11 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             val_model.set_infer_img(img=batch['images'])
             masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
 
+            
+
         masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
+        total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
 
         iou_eval.update(masks_gt, masks_pred, batch['index_name'])
         valid_pbar.update(1)
@@ -380,10 +368,27 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         mean_fg_iou = results_dict['Mean Foreground IoU']
         iou_eval.reset()
         valid_pbar.clear()
+        
+        with torch.no_grad():
+            pred_labels = (torch.sigmoid(masks_pred[0]) > 0.5).float()
+            true_labels = masks_gt[0]
+            intersection = (pred_labels * true_labels).sum()
+            union = pred_labels.sum() + true_labels.sum() - intersection
+            iou = intersection / union if union != 0 else torch.tensor(0.0)
+            precision = intersection / pred_labels.sum() if pred_labels.sum() != 0 else torch.tensor(0.0)
+            recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
 
         wandb.log({
             "epoch": epoch,
             "val_step": val_step,
+            "val_total_loss": loss_dict['total_loss'].item(),
+            "val_bce_loss": loss_dict['bce_loss'].item(),
+            "val_dice_loss": loss_dict['dice_loss'].item(),
+            "iou": iou.item(),
+            "precision": precision.item(),
+            "recall": recall.item(),
+            "f1_score": f1_score.item(),
             "mean_iou": mean_iou,
             "mean_acc": mean_acc,
             "overall_acc": overall_acc,
@@ -425,7 +430,7 @@ def log_images_to_wandb(batch, masks_pred, epoch, train_step, worker_args):
     for i in range(len(images)):
         plot_array, title = plot_with_projection(images[i], masks[i], preds[i], label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch)
          # Log the image to wandb
-        wandb.log({"Validation example": wandb.Image(plot_array, caption=title)})
+        wandb.log({"Validation example": wandb.Image(plot_array, caption=title), "epoch": epoch})
 
         
         
