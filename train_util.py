@@ -23,8 +23,8 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
     longitudes = np.linspace(-180, 180, image_np.shape[1])
     latitudes = np.linspace(-90, 90, image_np.shape[0])
 
-    # Normalize image data to [0, 1] range for imshow
-    image_np = image_np / 255.0
+    # # Normalize image data to [0, 1] range for imshow
+    # image_np = image_np / 255.0
 
     # Create a figure
     fig, ax = plt.subplots(figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()} if use_projection else {})
@@ -57,14 +57,14 @@ def plot_with_projection(image, mask, prediction, label, var_names, use_projecti
         title = f'World projection with RGB as {var_names[0]}, {var_names[1]}, {var_names[2]} - Epoch {epoch} - {label}'
         
     plt.title(title)
-
-    # Save the plot to a file with epoch and batch number
-    filename = f'{label}_epoch_{epoch}.png'
-    # plt.savefig(filename)
-    # plt.close(fig)
+    # Save the plot to a numpy array
+    fig.canvas.draw()
+    plot_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    plot_array = plot_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close(fig)
 
     # Log the image to wandb
-    wandb.log({"Validation example": wandb.Image(filename, caption=title)})
+    wandb.log({"Validation example": wandb.Image(plot_array, caption=title)})
 
 
 def calculate_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
