@@ -343,6 +343,7 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
         
         masks_gt = batch['gt_masks']
+        masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
         
         with torch.no_grad():
             _, loss_dict = calculate_losses(masks_pred, masks_gt)
@@ -355,9 +356,6 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             recall = intersection / true_labels.sum() if true_labels.sum() != 0 else torch.tensor(0.0)
             f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else torch.tensor(0.0)
 
-        
-        masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
-        
         iou_eval.update(masks_gt, masks_pred, batch['index_name'])
         valid_pbar.update(1)
         str_step_info = "Epoch: {epoch}/{epochs:4}.".format(epoch=epoch, epochs=max_epoch_num)
@@ -379,9 +377,6 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
         iou_eval.reset()
         valid_pbar.clear()
         
-        
-        
-
         wandb.log({
             "epoch": epoch,
             "val_step": val_step,
