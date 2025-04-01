@@ -29,9 +29,10 @@ from cat_sam.datasets.climatenet import ClimateDataset
 from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
+from unet import UNet_Original
 
 from train_util import parse, batch_to_cuda, calculate_dice_loss, plot_with_projection, worker_init_fn
-
+from cat_sam.datasets.misc import generate_prompts_from_mask
 
 
 torch.use_deterministic_algorithms(True, warn_only=True)
@@ -105,49 +106,99 @@ def create_dataloaders(train_dataset, val_dataset, worker_args):
     return train_dataloader, val_dataloader
 
 def initialize_model(worker_args, device, local_rank):
+    # CAT-SAM-MODEL
     if worker_args.cat_type == 'cat-t':
-        model_class = CATSAMT
+        cat_sam_model_class = CATSAMT
     elif worker_args.cat_type == 'cat-a':
-        model_class = CATSAMA
+        cat_sam_model_class = CATSAMA
     else:
         raise ValueError(f'invalid cat_type: {worker_args.cat_type}!')
-    model = model_class(model_type=worker_args.sam_type).to(device=device)
+    cat_sam_model = cat_sam_model_class(model_type=worker_args.sam_type).to(device=device)
     if torch.distributed.is_initialized():
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        cat_sam_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(cat_sam_model)
         try:
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
+            cat_sam_model = torch.nn.parallel.DistributedDataParallel(
+                cat_sam_model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
             )
         except Exception as e:
             print(f"Error initializing DistributedDataParallel: {e}")
-            model = model.to(device=device)
-    return model
+            cat_sam_model = cat_sam_model.to(device=device)
+            
+    # U-NET-MODEL:
+    if True:
+        pre_model_class = UNet_Original
+    elif False:
+        pre_model_class  = UNet_Original
+    else:
+        raise ValueError(f'invalid cat_type: {worker_args.cat_type}!')
+    
+    unet_model = pre_model_class(n_channels=16, n_classes=3).to(device)
+            
+    return cat_sam_model, unet_model
 
-def setup_optimizer_and_scheduler(model, worker_args):
+# def setup_optimizer_and_scheduler(cat_sam_model, unet_model, worker_args):
+#     """
+    
+#     Sets up the optimizer and learning rate scheduler for the given model based on the provided worker arguments.
+#     Args:
+#         model (torch.nn.Module): The model whose parameters will be optimized.
+#         worker_args (Namespace): A namespace containing the following optional attributes:
+#             - lr (float): Learning rate for the optimizer. Default is 1e-3.
+#             - weight_decay (float): Weight decay for the optimizer. Default is 1e-4.
+#             - shot_num (int): Number of shots for training. Expected values are None, 1, or 16.
+#             - max_epoch_num (int): Maximum number of epochs for training. Overrides default based on shot_num.
+#             - valid_per_epochs (int): Frequency of validation per epochs. Overrides default based on shot_num.
+#     Returns:
+#         tuple: A tuple containing:
+#             - optimizer (torch.optim.Optimizer): The configured optimizer.
+#             - scheduler (torch.optim.lr_scheduler._LRScheduler): The configured learning rate scheduler.
+#             - max_epoch_num (int): The maximum number of epochs for training.
+#             - valid_per_epochs (int): The frequency of validation per epochs.
+#     Raises:
+#         RuntimeError: If an invalid shot number is provided.
+#     """
+    
+#     ## CAT-SAM-MODEL
+#     lr = worker_args.lr if hasattr(worker_args, 'lr') else 1e-3
+#     weight_decay = worker_args.weight_decay if hasattr(worker_args, 'weight_decay') else 1e-4
+#     optimizer = torch.optim.AdamW(
+#         params=[p for p in cat_sam_model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay
+#     )
+#     if worker_args.shot_num is None:
+#         max_epoch_num, valid_per_epochs = 50, 1
+#     elif worker_args.shot_num == 1:
+#         max_epoch_num, valid_per_epochs = 2000, 20
+#     elif worker_args.shot_num == 16:
+#         max_epoch_num, valid_per_epochs = 200, 2
+#     else:
+#         raise RuntimeError("Invalid shot number provided. Expected values are None, 1, or 16.")
+    
+#     if worker_args.max_epoch_num:
+#         max_epoch_num = worker_args.max_epoch_num
+#     if worker_args.valid_per_epochs:
+#         valid_per_epochs = worker_args.valid_per_epochs
+#     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+#         optimizer=optimizer, T_max=max_epoch_num, eta_min=1e-5
+#     )
+#     return optimizer, scheduler, max_epoch_num, valid_per_epochs
+
+def setup_optimizer_and_scheduler(cat_sam_model, unet_model, worker_args):
     """
-    Sets up the optimizer and learning rate scheduler for the given model based on the provided worker arguments.
-    Args:
-        model (torch.nn.Module): The model whose parameters will be optimized.
-        worker_args (Namespace): A namespace containing the following optional attributes:
-            - lr (float): Learning rate for the optimizer. Default is 1e-3.
-            - weight_decay (float): Weight decay for the optimizer. Default is 1e-4.
-            - shot_num (int): Number of shots for training. Expected values are None, 1, or 16.
-            - max_epoch_num (int): Maximum number of epochs for training. Overrides default based on shot_num.
-            - valid_per_epochs (int): Frequency of validation per epochs. Overrides default based on shot_num.
-    Returns:
-        tuple: A tuple containing:
-            - optimizer (torch.optim.Optimizer): The configured optimizer.
-            - scheduler (torch.optim.lr_scheduler._LRScheduler): The configured learning rate scheduler.
-            - max_epoch_num (int): The maximum number of epochs for training.
-            - valid_per_epochs (int): The frequency of validation per epochs.
-    Raises:
-        RuntimeError: If an invalid shot number is provided.
+    Sets up a joint optimizer and scheduler for CAT-SAM and U-Net models.
     """
+    # Learning rate and weight decay with defaults
     lr = worker_args.lr if hasattr(worker_args, 'lr') else 1e-3
     weight_decay = worker_args.weight_decay if hasattr(worker_args, 'weight_decay') else 1e-4
+
+    # Combine parameters from both models
+    all_trainable_params = list(p for p in cat_sam_model.parameters() if p.requires_grad) + \
+                           list(p for p in unet_model.parameters() if p.requires_grad)
+
     optimizer = torch.optim.AdamW(
-        params=[p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay
+        params=all_trainable_params, lr=lr, weight_decay=weight_decay
     )
+
+    # Epoch configuration based on shot number
     if worker_args.shot_num is None:
         max_epoch_num, valid_per_epochs = 50, 1
     elif worker_args.shot_num == 1:
@@ -157,15 +208,18 @@ def setup_optimizer_and_scheduler(model, worker_args):
     else:
         raise RuntimeError("Invalid shot number provided. Expected values are None, 1, or 16.")
     
-    if worker_args.max_epoch_num:
+    # Manual overrides from worker_args
+    if hasattr(worker_args, 'max_epoch_num') and worker_args.max_epoch_num:
         max_epoch_num = worker_args.max_epoch_num
-    if worker_args.valid_per_epochs:
+    if hasattr(worker_args, 'valid_per_epochs') and worker_args.valid_per_epochs:
         valid_per_epochs = worker_args.valid_per_epochs
+
+    # Cosine Annealing Learning Rate Scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=max_epoch_num, eta_min=1e-5
     )
-    return optimizer, scheduler, max_epoch_num, valid_per_epochs
 
+    return optimizer, scheduler, max_epoch_num, valid_per_epochs
 
 
 
@@ -184,61 +238,88 @@ def setup_experiment_path(worker_args):
     )
 
 
-def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num):
+def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num):
     if hasattr(train_dataloader.sampler, 'set_epoch'):
         train_dataloader.sampler.set_epoch(epoch)
 
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
         batch = batch_to_cuda(batch, device)
+
+        # ✅ Forward through UNet to get 3-channel feature maps
+        unet_output = unet_model(batch['input'])  # shape: [B, 3, H, W]
         
-        if epoch == 1 : 
-            if worker_args.shot_num == 1:
-                img = batch['images'][0]
-                gt = batch['gt_masks'][0]
-                label = batch['file_name'][0]
-                var_names = batch['var_names'][0]
-                plot_array, title = plot_with_projection(img, gt, None, label, var_names, use_projection=True, batch_num=train_step, epoch=epoch)
-                # Log the image to wandb
-                wandb.log({"The Training Image": wandb.Image(plot_array, caption=title)})
-                            
-                
-            if worker_args.shot_num == 16:
-                images = [img for img in batch['images'][:4]]
-                masks = [mask for mask in batch['gt_masks'][:4]]
-                # preds = [pred for pred in masks_pred[:4]]
-                label = [f"Image {i}" for i in batch['file_name'][:4]]
-                var_names = [variable for variable in batch['var_names'][:4]]
-
-                for i in range(len(images)):
-                    plot_array, title = plot_with_projection(images[i], masks[i], None, label[i], var_names[i], use_projection=True, batch_num=train_step, epoch=epoch)
-                    # Log the image to wandb
-                    wandb.log({"Training examples": wandb.Image(plot_array, caption=title)})
+        # Initialize lists to hold the generated prompts
+        point_coords_list = []
+        box_coords_list = []
+        noisy_object_masks_list = []
+        object_masks_list = []
+        
+        # Generate prompts for each item in the batch
+        for i in range(batch['input'].size(0)):  # Iterate over each item in the batch
+            gt_mask = batch['gt_masks'][i:i+1]  # Get the ground truth mask for the i-th item
             
-        if worker_args.debugging:
-            # Debugging: Print available keys in the batch
-            if local_rank == 0 and train_step == 0:
-                print(f"Batch keys: {batch.keys()}")
-            if 'object_masks' not in batch:  # Check if 'object_masks' key is available
-                raise KeyError("The key 'object_masks' is missing from the batch. Available keys are: {}".format(batch.keys()))
-            for key, value in batch.items():
-                print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
+            # Randomly choose a prompt type for this item
+            prompt_type = random.choice(['point', 'box', 'mask'])
+            
+            # Generate prompts for the current item
+            point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
+                gt_mask=gt_mask,
+                tgt_prompts=[prompt_type]
+            )
+            
+            # Add the generated prompts to the respective lists
+            point_coords_list.append(point_coords)
+            box_coords_list.append(box_coords)
+            noisy_object_masks_list.append(noisy_object_masks)
+            object_masks_list.append(object_masks)
+    
+            # Now add the generated prompts to the batch dictionary
+            batch['point_coords'] = torch.cat(point_coords_list, dim=0)  # Concatenate along batch dimension
+            batch['box_coords'] = torch.cat(box_coords_list, dim=0)
+            batch['noisy_object_masks'] = torch.cat(noisy_object_masks_list, dim=0)
+            batch['object_masks'] = torch.cat(object_masks_list, dim=0)
+        
 
+        # if epoch == 1:
+        #     # Optional: visualize raw inputs or UNet outputs
+        #     if worker_args.shot_num in [1, 16]:
+        #         images = [img for img in batch['images'][:4]]
+        #         masks = [mask for mask in batch['gt_masks'][:4]]
+        #         label = [f"Image {i}" for i in batch['file_name'][:4]]
+        #         var_names = [variable for variable in batch['var_names'][:4]]
 
-        masks_pred = model(
-            imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
-            box_coords=batch['box_coords'], noisy_masks=batch['noisy_object_masks']
+        #         for i in range(len(images)):
+        #             plot_array, title = plot_with_projection(images[i], masks[i], None, label[i], var_names[i],
+        #                                                      use_projection=True, batch_num=train_step, epoch=epoch)
+        #             wandb.log({"Training examples": wandb.Image(plot_array, caption=title)})
+
+        # if worker_args.debugging and local_rank == 0 and train_step == 0:
+        #     print(f"Batch keys: {batch.keys()}")
+        #     for key, value in batch.items():
+        #         print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
+
+        # ✅ Forward through CAT-SAM using the 3-channel feature maps
+        masks_pred = cat_sam_model(
+            imgs=unet_output,  # <- instead of batch['images']
+            point_coords=batch['point_coords'],
+            point_labels=batch['point_labels'],
+            box_coords=batch['box_coords'],
+            noisy_masks=batch['noisy_object_masks']
         )
+
+        # Loss computation and training step
         masks_gt = batch['object_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
-
         total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
+
         if worker_args.wandb:
             log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict)
 
-        backward_context = model.no_sync if torch.distributed.is_initialized() else nullcontext
+        backward_context = cat_sam_model.no_sync if torch.distributed.is_initialized() else nullcontext
         with backward_context():
             total_loss.backward()
+
         optimizer.step()
         optimizer.zero_grad()
         reduce_losses(loss_dict)
@@ -249,6 +330,7 @@ def train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device
     scheduler.step()
     if train_pbar:
         train_pbar.clear()
+
 
 
 def preprocess_masks(masks_pred, masks_gt):
@@ -315,7 +397,7 @@ def update_progress_bar(train_pbar, epoch, max_epoch_num, loss_dict):
     train_pbar.set_postfix_str(str_step_info)
 
 
-def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num):
+def validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num):
 
     """
     Validate the model for one epoch.
@@ -332,11 +414,11 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
     Returns:
         float: The updated best mean IoU after validation.
     """
-    model.eval()
+    cat_sam_model.eval()
     valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
     for val_step, batch in enumerate(val_dataloader):
         batch = batch_to_cuda(batch, device)
-        val_model = model.module if hasattr(model, 'module') else model
+        val_model = cat_sam_model.module if hasattr(cat_sam_model, 'module') else cat_sam_model
 
         with torch.no_grad():
             val_model.set_infer_img(img=batch['images'])
@@ -398,7 +480,7 @@ def validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path,
             
             if worker_args.save_model:
                 torch.save(
-                    model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
+                    cat_sam_model.state_dict() if not hasattr(cat_sam_model, 'module') else cat_sam_model.module.state_dict(),
                     join(exp_path, "best_model.pth")
                 )
             best_miou = mean_iou
@@ -437,8 +519,8 @@ def main_worker(worker_id, worker_args):
     device, local_rank = setup_device_and_distributed(worker_id, worker_args)
     train_dataset, val_dataset = prepare_datasets(worker_args)
     train_dataloader, val_dataloader = create_dataloaders(train_dataset, val_dataset, worker_args)
-    model = initialize_model(worker_args, device, local_rank)
-    optimizer, scheduler, max_epoch_num, valid_per_epochs = setup_optimizer_and_scheduler(model, worker_args)
+    cat_sam_model, unet_model = initialize_model(worker_args, device, local_rank)
+    optimizer, scheduler, max_epoch_num, valid_per_epochs = setup_optimizer_and_scheduler(cat_sam_model, unet_model, worker_args)
 
     best_miou = 0
     iou_eval = initialize_evaluator(worker_args, train_dataset)
@@ -447,9 +529,9 @@ def main_worker(worker_id, worker_args):
     os.makedirs(exp_path, exist_ok=True)
 
     for epoch in range(1, max_epoch_num + 1):
-        train_one_epoch(epoch, train_dataloader, model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num)
+        train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num)
         if local_rank == 0 and epoch % valid_per_epochs == 0:
-            validate_one_epoch(epoch, val_dataloader, model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
+            validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
 
 if __name__ == '__main__':
     args = parse()

@@ -42,79 +42,100 @@ class ClimateDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
+    # def __getitem__(self, index):
+    #     # Use filename as the unique index name.
+    #     file_path = self.files[index]
+    #     index_name = os.path.basename(file_path)
+
+
+        
+    #     # Load the .nc file.
+    #     dataset = xr.load_dataset(file_path)
+        
+    #     # 
+    #     prompt_kwargs = self.prompt_kwargs.copy() 
+        
+        
+    #     # Generate the RGB image from selected climate variables.
+    #     rgb_image, [var1, var2, var3] = self.to_image(dataset)  # see function below
+        
+    #     # Generate the binary mask from the dataset.
+    #     climatenet_label = prompt_kwargs.pop("climatenet_label", 'cyclone')
+    #     mask = self.get_labels(dataset, label_name=climatenet_label)  # see function below
+        
+    #     # Apply optional transforms.
+    #     if self.transforms is not None:
+    #         transformed = self.transforms(image=rgb_image, mask=mask)
+    #         rgb_image, mask = transformed["image"], transformed["mask"]
+        
+    #     # Generate prompts (point, box, and noisy masks).
+    #     point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
+    #         gt_mask=mask,
+    #         tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],
+    #         **prompt_kwargs
+    #     )
+        
+    #     # Return a dictionary that matches the expected format.
+    #     return {
+    #         "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension
+    #         "images": rgb_image,  # should be in (H, W, 3) format as a numpy array.
+    #         "gt_masks": mask,     # binary mask.
+    #         "index_name": index_name,
+    #         "point_coords": point_coords,
+    #         "box_coords": box_coords,
+    #         "noisy_object_masks": noisy_object_masks,
+    #         "object_masks": object_masks,
+    #         "var_names": [var1, var2, var3]
+    #     }
+    
     def __getitem__(self, index):
         # Use filename as the unique index name.
         file_path = self.files[index]
         index_name = os.path.basename(file_path)
 
-
-        
         # Load the .nc file.
         dataset = xr.load_dataset(file_path)
-        
         # 
         prompt_kwargs = self.prompt_kwargs.copy() 
-        
-        
-        # Generate the RGB image from selected climate variables.
-        rgb_image, [var1, var2, var3] = self.to_image(dataset)  # see function below
         
         # Generate the binary mask from the dataset.
         climatenet_label = prompt_kwargs.pop("climatenet_label", 'cyclone')
         mask = self.get_labels(dataset, label_name=climatenet_label)  # see function below
-        
-        # Apply optional transforms.
-        if self.transforms is not None:
-            transformed = self.transforms(image=rgb_image, mask=mask)
-            rgb_image, mask = transformed["image"], transformed["mask"]
-        
-        # Generate prompts (point, box, and noisy masks).
-        point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
-            gt_mask=mask,
-            tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],
-            **prompt_kwargs
-        )
-        
+        data = self.get_data(dataset)
         # Return a dictionary that matches the expected format.
         return {
-            "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension
-            "images": rgb_image,  # should be in (H, W, 3) format as a numpy array.
+            "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension,
+            "input": data,
             "gt_masks": mask,     # binary mask.
-            "index_name": index_name,
-            "point_coords": point_coords,
-            "box_coords": box_coords,
-            "noisy_object_masks": noisy_object_masks,
-            "object_masks": object_masks,
-            "var_names": [var1, var2, var3]
+            "index_name": index_name
         }
-
-    def to_image(self, dataset, var_1='TMQ', var_2='U850', var_3='V850'):
+    
+    def get_data(self, dataset):
         """
-        Convert the dataset into an RGB image using three selected variables.
+        Convert the dataset into a multi-channel image using all 16 variables.
+        Returns:
+            image: numpy array of shape (H, W, 16)
+            var_names: list of variable names
         """
-        # Assume dataset.to_array() gives an array with a "variable" dimension.
-        features = dataset.to_array()
-        # Select the variables (you may need to adjust this if your dataset is structured differently).
-        var1 = features.sel(variable=var_1).values
-        var2 = features.sel(variable=var_2).values
-        var3 = features.sel(variable=var_3).values
+        # Get the dataset as a variable x height x width array
+        features = dataset.to_array()  # shape: (variable, H, W)
 
-        # Ensure variables are 2D (H, W) before stacking
-        var1 = np.squeeze(var1)
-        var2 = np.squeeze(var2)
-        var3 = np.squeeze(var3)
-        
-        # Stack the channels to form an RGB image.
-        rgb_image = np.stack([var1, var2, var3], axis=-1)
-        # Normalize the image to 0-255.
-        rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min())
-        rgb_image = (rgb_image * 255).astype(np.uint8)
+        # Get variable names
+        var_names = features.variable.values.tolist()
 
-        # Remove the batch dimension if it exists (1, H, W, C) → (H, W, C)
-        if rgb_image.shape[0] == 1:
-            rgb_image = np.squeeze(rgb_image, axis=0) 
+        # Convert to numpy and transpose to (H, W, C)
+        # shape: (variable, H, W) → (H, W, variable)
+        data = features.values  # shape: (16, H, W)
+        data = np.transpose(data, (1, 2, 0))  # shape: (H, W, 16)
 
-        return rgb_image, [var_1, var_2, var_3]
+        # Normalize each channel individually to [0, 255]
+        data_min = data.min(axis=(0, 1), keepdims=True)
+        data_max = data.max(axis=(0, 1), keepdims=True)
+        data = (data - data_min) / (data_max - data_min + 1e-8)  # add epsilon to avoid division by zero
+        data = (data * 255).astype(np.uint8)
+
+        return data
+
 
     def get_labels(self, dataset, label_name='cyclone'):
         """
