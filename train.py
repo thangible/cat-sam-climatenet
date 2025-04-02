@@ -301,32 +301,13 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
                 point_coords.append(torch.FloatTensor(_point_coords))
                 point_labels.append(torch.LongTensor(_point_labels))
                 
-        batch['point_coords'] = point_coords.to(device=device, dtype=torch.float32)
-        batch['point_labels'] = point_labels.to(device=device, dtype=torch.long)
+        batch['point_coords'] = [pc.to(device=device, dtype=torch.float32) if pc is not None else None for pc in point_coords]
+        batch['point_labels'] = [pl.to(device=device, dtype=torch.long) if pl is not None else None for pl in point_labels ]
         batch['box_coords'] = \
-            [torch.FloatTensor(item) if item is not None else None for item in box_coords_list].to(device=device, dtype=torch.float32)
-        batch['noisy_object_masks'] =safe_cat(noisy_object_masks_list, dim=0).to(device=device, dtype=torch.float32)
-        batch['object_masks'] = safe_cat(object_masks_list, dim=0).to(device=device, dtype=torch.float32)
-                        
-        # if epoch == 1:
-        #     # Optional: visualize raw inputs or UNet outputs
-        #     if worker_args.shot_num in [1, 16]:
-        #         images = [img for img in batch['images'][:4]]
-        #         masks = [mask for mask in batch['gt_masks'][:4]]
-        #         label = [f"Image {i}" for i in batch['file_name'][:4]]
-        #         var_names = [variable for variable in batch['var_names'][:4]]
-
-        #         for i in range(len(images)):
-        #             plot_array, title = plot_with_projection(images[i], masks[i], None, label[i], var_names[i],
-        #                                                      use_projection=True, batch_num=train_step, epoch=epoch)
-        #             wandb.log({"Training examples": wandb.Image(plot_array, caption=title)})
-
-        # if worker_args.debugging and local_rank == 0 and train_step == 0:
-        #     print(f"Batch keys: {batch.keys()}")
-        #     for key, value in batch.items():
-        #         print(f"{key}: {value.shape if isinstance(value, torch.Tensor) else type(value)}")
-
-        # ✅ Forward through CAT-SAM using the 3-channel feature maps
+            [torch.FloatTensor(item).to(device=device, dtype=torch.float32) if item is not None else None for item in box_coords_list]
+        batch['noisy_object_masks'] = [nom.to(device=device, dtype=torch.float32) if nom is not None else None for nom in noisy_object_masks_list]
+        batch['object_masks'] = [om.to(device=device, dtype=torch.float32) if om is not None else None for om in object_masks_list]
+        
         masks_pred = cat_sam_model(
             imgs=batch['images'],  
             point_coords=batch['point_coords'],
