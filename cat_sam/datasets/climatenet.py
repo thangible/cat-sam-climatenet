@@ -199,7 +199,8 @@ class ClimateDataset(Dataset):
         ]
 
         # Convert inputs and masks to tensors
-        batch_dict['input'] = [torch.from_numpy(inp).float() for inp in batch_dict['input']]
+        batch_dict['input'] = torch.stack([torch.from_numpy(inp).float() for inp in batch_dict['input']])
+
         batch_dict['gt_masks'] = [torch.from_numpy(mask).long() for mask in batch_dict['gt_masks']]
 
         # Optional: Stack if all are same shape (e.g., during training with fixed size)

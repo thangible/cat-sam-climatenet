@@ -245,6 +245,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
     train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False) if local_rank == 0 else None
     for train_step, batch in enumerate(train_dataloader):
         batch = batch_to_cuda(batch, device)
+        print(f"batch['input'] shape: {batch['input'].shape}") 
 
         # ✅ Forward through UNet to get 3-channel feature maps
         unet_output = unet_model(batch['input'])  # shape: [B, 2, H, W]
