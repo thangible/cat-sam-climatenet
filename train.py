@@ -237,6 +237,9 @@ def setup_experiment_path(worker_args):
         f'{worker_args.dataset}_{worker_args.sam_type}_{worker_args.cat_type}_{worker_args.shot_num if worker_args.shot_num else "full"}shot'
     )
 
+def safe_cat(tensor_list, dim=0):
+    tensor_list = [x for x in tensor_list if x is not None]
+    return torch.cat(tensor_list, dim=dim) if tensor_list else None
 
 def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num):
     if hasattr(train_dataloader.sampler, 'set_epoch'):
@@ -254,7 +257,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         
         # Initialize lists to hold the generated prompts
         point_coords_list = []
-        box_coords_list = []
+        # box_coords_list = []
         noisy_object_masks_list = []
         object_masks_list = []
         
@@ -274,15 +277,15 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             
             # Add the generated prompts to the respective lists
             point_coords_list.append(point_coords)
-            box_coords_list.append(box_coords)
+            # box_coords_list.append(box_coords)
             noisy_object_masks_list.append(noisy_object_masks)
             object_masks_list.append(object_masks)
     
             # Now add the generated prompts to the batch dictionary
-            batch['point_coords'] = torch.cat(point_coords_list, dim=0)  # Concatenate along batch dimension
-            batch['box_coords'] = torch.cat(box_coords_list, dim=0)
-            batch['noisy_object_masks'] = torch.cat(noisy_object_masks_list, dim=0)
-            batch['object_masks'] = torch.cat(object_masks_list, dim=0)
+            batch['point_coords'] = safe_cat(point_coords_list, dim=0)  # Concatenate along batch dimension
+            # batch['box_coords'] = safe_cat(box_coords_list, dim=0)
+            batch['noisy_object_masks'] =safe_cat(noisy_object_masks_list, dim=0)
+            batch['object_masks'] = safe_cat(object_masks_list, dim=0)
         
 
         # if epoch == 1:
@@ -308,7 +311,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             imgs=batch['image'],  # <- instead of batch['images']
             point_coords=batch['point_coords'],
             point_labels=batch['point_labels'],
-            box_coords=batch['box_coords'],
+            box_coords=[None for _ in batch['point_coords']],
             noisy_masks=batch['noisy_object_masks']
         )
 
@@ -427,8 +430,8 @@ def validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eva
 
         with torch.no_grad():
             val_model.set_infer_img(img=batch['images'])
-            masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
-        
+            # masks_pred = val_model.infer(point_coords=batch['point_coords']) if worker_args.dataset == 'm_roads' else val_model.infer(box_coords=batch['box_coords'])
+            masks_pred = val_model.infer(point_coords=batch['point_coords'])
         masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
         
