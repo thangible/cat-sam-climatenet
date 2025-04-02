@@ -109,7 +109,11 @@ def worker_init_fn(worker_id: int, base_seed: int, same_worker_seed: bool = True
 
 def batch_to_cuda(batch, device):
     for key in batch.keys():
-        if key in ['images', 'gt_masks', 'point_coords', 'box_coords', 'noisy_object_masks', 'object_masks']:
+        if key == 'input':
+            # input is already a single tensor (B, C, H, W)
+            batch[key] = batch[key].to(device=device, dtype=torch.float32)
+        
+        elif key in ['images', 'gt_masks', 'point_coords', 'box_coords', 'noisy_object_masks', 'object_masks']:
             batch[key] = [
                 item.to(device=device, dtype=torch.float32) if item is not None else None for item in batch[key]
             ]
