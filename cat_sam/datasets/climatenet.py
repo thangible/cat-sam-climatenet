@@ -35,13 +35,20 @@ class ClimateDataset(Dataset):
         shot_num = prompt_kwargs.pop("shot_num", None)
         if shot_num is not None:
             self.files = self.files[:shot_num]
-            
+        
+        self.mean_std_path = os.path.join(data_dir, "mean_std.npy")
+        self.mean_std_dict = self.calculate_mean_std()    
         self.mean_std_dict = self.calculate_mean_std()
     
     def calculate_mean_std(self):
         """
         Calculate the mean and std of the data across all the files.
         """
+        if os.path.exists(self.mean_std_path):
+            print(f"Loading mean/std from {self.mean_std_path}")
+            return np.load(self.mean_std_path, allow_pickle=True).item()
+
+        print("Calculating mean/std from scratch...")
         means = []
         stds = []
         
@@ -78,8 +85,8 @@ class ClimateDataset(Dataset):
         Normalize the data using Z-normalization: (X - mean) / std, then scale it to [0, 255].
         """
         # Z-normalize the data
-        mean = self.mean_std_dict["mean"]
-        std = self.mean_std_dict["std"]
+        mean = self.mean_std_dict["mean"][:, np.newaxis, np.newaxis]
+        std = self.mean_std_dict["std"][:, np.newaxis, np.newaxis]
         normalized_data = (data - mean) / std
 
         # Scale to [0, 255]
