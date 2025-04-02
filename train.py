@@ -263,7 +263,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             # gt_mask = batch['gt_masks'][i:i+1]  # Get the ground truth mask for the i-th item
             
             # Randomly choose a prompt type for this item
-            prompt_type = random.choice(['point', 'box', 'mask'])
+            prompt_type = random.choice(['point'])
             
             # Generate prompts for the current item
             point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
