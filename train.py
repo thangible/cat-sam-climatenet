@@ -293,16 +293,24 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
                 point_labels_list.append(None)
             else:
                 _point_coords, _point_labels = point_coords, []
-                max_num_coords = max(len(_p_c) for _p_c in _point_coords)
-                for _p_c in _point_coords:
-                    _point_labels.append([1] * len(_p_c))  # labels = 1
-                    # padding
-                    if len(_p_c) < max_num_coords:
-                        pad = max_num_coords - len(_p_c)
-                        _p_c.extend([[0, 0]] * pad)
-                        _point_labels[-1].extend([-1] * pad)
-                point_coords_list.append(torch.FloatTensor(_point_coords).to(device))
-                point_labels_list.append(torch.LongTensor(_point_labels).to(device))
+                max_num_coords = max(len(p) for p in _point_coords)
+
+                padded_coords = []
+                padded_labels = []
+                for p in _point_coords:
+                    labels = [1] * len(p)
+                    if len(p) < max_num_coords:
+                        pad_len = max_num_coords - len(p)
+                        p += [[0, 0]] * pad_len
+                        labels += [-1] * pad_len
+                    padded_coords.append(p)
+                    padded_labels.append(labels)
+
+                point_coords_tensor = torch.FloatTensor(padded_coords).to(device)
+                point_labels_tensor = torch.LongTensor(padded_labels).to(device)
+
+                point_coords_list.append(point_coords_tensor)
+                point_labels_list.append(point_labels_tensor)
 
             # noisy_object_masks_list.append(noisy_object_masks)
             # object_masks_list.append(object_masks)
