@@ -308,7 +308,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
 
         # ✅ Forward through CAT-SAM using the 3-channel feature maps
         masks_pred = cat_sam_model(
-            imgs=batch['image'],  # <- instead of batch['images']
+            imgs=batch['images'],  
             point_coords=batch['point_coords'],
             point_labels=batch['point_labels'],
             box_coords=[None for _ in batch['point_coords']],
