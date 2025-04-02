@@ -257,7 +257,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         
         # Initialize lists to hold the generated prompts
         point_coords_list = []
-        point_labels_list = []
+        box_coords_list = []
         noisy_object_masks_list = []
         object_masks_list = []
         
@@ -269,57 +269,44 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             prompt_type = random.choice(['point'])
             
             # Generate prompts for the current item
-            point_coords, _, noisy_object_masks, object_masks = generate_prompts_from_mask(
+            point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
                 device,
                 gt_mask=predicted_prompt[i].detach().cpu().numpy().astype(np.uint8),
                 tgt_prompts=[prompt_type]
             )
             
-            # Add the generated prompts to the respective lists
-            point_coords_list.append(point_coords)
-            # box_coords_list.append(box_coords)
-            noisy_object_masks_list.append(noisy_object_masks)
             object_masks_list.append(object_masks)
-    
-            # Now add the generated prompts to the batch dictionary
-            batch['point_coords'] = safe_cat(point_coords_list, dim=0)  # Concatenate along batch dimension
-            # batch['box_coords'] = safe_cat(box_coords_list, dim=0)
-            batch['noisy_object_masks'] =safe_cat(noisy_object_masks_list, dim=0)
-            batch['object_masks'] = safe_cat(object_masks_list, dim=0)
+            noisy_object_masks_list.append(noisy_object_masks)
+            point_coords_list.append(point_coords)
+            box_coords_list.append(box_coords)
         
-            # pad point_coords and create point_labels
-            if point_coords is None:
-                point_coords_list.append(None)
-                point_labels_list.append(None)
+        point_coords, point_labels = [], []
+        for item in point_coords_list:
+            # give a None value to the images without any prompt points
+            if item is None:
+                point_coords.append(None)
+                point_labels.append(None)
+            # all the labels of prompt points are either foreground points (label=1) or placeholder (label=-1)
             else:
-                _point_coords, _point_labels = point_coords, []
-                max_num_coords = max(len(p) for p in _point_coords)
+                _point_coords, _point_labels = item, []
+                max_num_coords = max(len(_p_c) for _p_c in _point_coords)
+                for _p_c in _point_coords:
+                    _point_labels.append([1 for _ in _p_c])
 
-                padded_coords = []
-                padded_labels = []
-                for p in _point_coords:
-                    labels = [1] * len(p)
-                    if len(p) < max_num_coords:
-                        pad_len = max_num_coords - len(p)
-                        p += [[0, 0]] * pad_len
-                        labels += [-1] * pad_len
-                    padded_coords.append(p)
-                    padded_labels.append(labels)
+                    curr_num_coords = len(_p_c)
+                    if curr_num_coords < max_num_coords:
+                        _p_c.extend([[0, 0] for _ in range(max_num_coords - curr_num_coords)])
+                        _point_labels[-1].extend([-1 for _ in range(max_num_coords - curr_num_coords)])
 
-                point_coords_tensor = torch.FloatTensor(padded_coords).to(device)
-                point_labels_tensor = torch.LongTensor(padded_labels).to(device)
-
-                point_coords_list.append(point_coords_tensor)
-                point_labels_list.append(point_labels_tensor)
-
-            # noisy_object_masks_list.append(noisy_object_masks)
-            # object_masks_list.append(object_masks)
-
-            # Update batch
-            batch['point_coords'] = point_coords_list
-            batch['point_labels'] = point_labels_list
-            # batch['noisy_object_masks'] = noisy_object_masks_list
-            # batch['object_masks'] = object_masks_list
+                point_coords.append(torch.FloatTensor(_point_coords))
+                point_labels.append(torch.LongTensor(_point_labels))
+                
+        batch['point_coords'] = point_coords.to(device=device, dtype=torch.float32)
+        batch['point_labels'] = point_labels.to(device=device, dtype=torch.long)
+        batch['box_coords'] = \
+            [torch.FloatTensor(item) if item is not None else None for item in box_coords_list].to(device=device, dtype=torch.float32)
+        batch['noisy_object_masks'] =safe_cat(noisy_object_masks_list, dim=0).to(device=device, dtype=torch.float32)
+        batch['object_masks'] = safe_cat(object_masks_list, dim=0).to(device=device, dtype=torch.float32)
                         
         # if epoch == 1:
         #     # Optional: visualize raw inputs or UNet outputs
@@ -344,7 +331,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             imgs=batch['images'],  
             point_coords=batch['point_coords'],
             point_labels=batch['point_labels'],
-            box_coords=[None for _ in batch['point_coords']],
+            box_coords=batch['box_coords'],
             noisy_masks=batch['noisy_object_masks']
         )
 
