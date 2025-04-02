@@ -132,7 +132,7 @@ def initialize_model(worker_args, device, local_rank):
     else:
         raise ValueError(f'invalid cat_type: {worker_args.cat_type}!')
     
-    unet_model = pre_model_class(n_channels=16, n_classes=2).to(device)
+    unet_model = pre_model_class(n_channels=17, n_classes=2).to(device)
             
     return cat_sam_model, unet_model
 
