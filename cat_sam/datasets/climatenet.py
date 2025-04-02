@@ -2,6 +2,7 @@ import os
 import random
 import xarray as xr
 import numpy as np
+import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from cat_sam.datasets.misc import generate_prompts_from_mask
@@ -38,8 +39,7 @@ class ClimateDataset(Dataset):
         
         self.mean_std_path = os.path.join(data_dir, "mean_std.npy")
         self.mean_std_dict = self.calculate_mean_std()    
-        self.mean_std_dict = self.calculate_mean_std()
-    
+
     def calculate_mean_std(self):
         """
         Calculate the mean and std of the data across all the files.
@@ -62,11 +62,11 @@ class ClimateDataset(Dataset):
         mean_dict = np.mean(means, axis=0)
         std_dict = np.mean(stds, axis=0)
         
+        result = {"mean": mean_dict, "std": std_dict}
+        np.save(self.mean_std_path, result)
+        
         # Return a dictionary with channel-wise mean and std
-        return {
-            "mean": mean_dict,
-            "std": std_dict
-        }
+        return result
     
     def z_normalize(self, data):
         """
@@ -180,7 +180,29 @@ class ClimateDataset(Dataset):
         # print("Mask shape:", mask.shape)
         return mask
 
-    @staticmethod
-    def collate_fn(batch):
-        # Use the collate function defined in BinaryCATSAMDataset.
-        return BinaryCATSAMDataset.collate_fn(batch)
+
+    @classmethod
+    def collate_fn(cls, batch):
+        """
+        Custom collate function to batch ClimateDataset samples.
+        Handles image/mask tensors without assuming same spatial shape.
+        """
+        batch_dict = {key: [] for key in batch[0].keys()}
+
+        for sample in batch:
+            for key, value in sample.items():
+                batch_dict[key].append(value)
+
+        # Convert images to tensors: (H, W, 3) → (3, H, W)
+        batch_dict['images'] = [
+            torch.from_numpy(img).permute(2, 0, 1).float() for img in batch_dict['images']
+        ]
+
+        # Convert inputs and masks to tensors
+        batch_dict['input'] = [torch.from_numpy(inp).float() for inp in batch_dict['input']]
+        batch_dict['gt_masks'] = [torch.from_numpy(mask).long() for mask in batch_dict['gt_masks']]
+
+        # Optional: Stack if all are same shape (e.g., during training with fixed size)
+        # Otherwise, leave as list to handle variable-sized input
+        return batch_dict
+
