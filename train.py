@@ -257,7 +257,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         
         # Initialize lists to hold the generated prompts
         point_coords_list = []
-        # box_coords_list = []
+        point_labels_list = []
         noisy_object_masks_list = []
         object_masks_list = []
         
@@ -269,7 +269,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             prompt_type = random.choice(['point'])
             
             # Generate prompts for the current item
-            point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
+            point_coords, _, noisy_object_masks, object_masks = generate_prompts_from_mask(
                 device,
                 gt_mask=predicted_prompt[i].detach().cpu().numpy().astype(np.uint8),
                 tgt_prompts=[prompt_type]
@@ -287,7 +287,32 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             batch['noisy_object_masks'] =safe_cat(noisy_object_masks_list, dim=0)
             batch['object_masks'] = safe_cat(object_masks_list, dim=0)
         
+            # pad point_coords and create point_labels
+            if point_coords is None:
+                point_coords_list.append(None)
+                point_labels_list.append(None)
+            else:
+                _point_coords, _point_labels = point_coords, []
+                max_num_coords = max(len(_p_c) for _p_c in _point_coords)
+                for _p_c in _point_coords:
+                    _point_labels.append([1] * len(_p_c))  # labels = 1
+                    # padding
+                    if len(_p_c) < max_num_coords:
+                        pad = max_num_coords - len(_p_c)
+                        _p_c.extend([[0, 0]] * pad)
+                        _point_labels[-1].extend([-1] * pad)
+                point_coords_list.append(torch.FloatTensor(_point_coords).to(device))
+                point_labels_list.append(torch.LongTensor(_point_labels).to(device))
 
+            # noisy_object_masks_list.append(noisy_object_masks)
+            # object_masks_list.append(object_masks)
+
+            # Update batch
+            batch['point_coords'] = point_coords_list
+            batch['point_labels'] = point_labels_list
+            # batch['noisy_object_masks'] = noisy_object_masks_list
+            # batch['object_masks'] = object_masks_list
+                        
         # if epoch == 1:
         #     # Optional: visualize raw inputs or UNet outputs
         #     if worker_args.shot_num in [1, 16]:
