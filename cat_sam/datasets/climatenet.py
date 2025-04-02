@@ -21,11 +21,11 @@ class ClimateDataset(Dataset):
         train_path = os.path.join(data_dir, "train")
         test_path = os.path.join(data_dir, "test")
         sub_dir = train_path if train_flag else test_path
-        # print(sub_dir)
+
         self.files = [os.path.join(sub_dir, f) for f in sorted(os.listdir(sub_dir)) if f.endswith(".nc")]
         if len(self.files) == 0:
             raise ValueError(f"No .nc files found in directory: {sub_dir}")
-        # print(len(self.files))
+
         self.train_flag = train_flag
         self.transforms = Compose(transforms) if transforms else None
         
@@ -35,58 +35,68 @@ class ClimateDataset(Dataset):
         shot_num = prompt_kwargs.pop("shot_num", None)
         if shot_num is not None:
             self.files = self.files[:shot_num]
+            
+        self.mean_std_dict = self.calculate_mean_std()
+    
+    def calculate_mean_std(self):
+        """
+        Calculate the mean and std of the data across all the files.
+        """
+        means = []
+        stds = []
         
+        for file in self.files:
+            dataset = xr.load_dataset(file)
+            data = self.get_data(dataset)
+            means.append(np.mean(data, axis=(1,2)))  # Mean for each of the 16 channels
+            stds.append(np.std(data, axis=(1,2)))    # Std for each of the 16 channels
         
+        # Calculate the overall mean and std for each channel across all files
+        mean_dict = np.mean(means, axis=0)
+        std_dict = np.mean(stds, axis=0)
         
+        # Return a dictionary with channel-wise mean and std
+        return {
+            "mean": mean_dict,
+            "std": std_dict
+        }
+    
+    def z_normalize(self, data):
+        """
+        Normalize the data using Z-normalization: (X - mean) / std
+        """
+        mean = self.mean_std_dict["mean"]
+        std = self.mean_std_dict["std"]
+        
+        # Z-normalization for each channel
+        normalized_data = (data - mean) / std
+        
+        return normalized_data
+    
+    def z_normalize_and_scale(self, data):
+        """
+        Normalize the data using Z-normalization: (X - mean) / std, then scale it to [0, 255].
+        """
+        # Z-normalize the data
+        mean = self.mean_std_dict["mean"]
+        std = self.mean_std_dict["std"]
+        normalized_data = (data - mean) / std
+
+        # Scale to [0, 255]
+        normalized_data_min = normalized_data.min(axis=(0, 1), keepdims=True)
+        normalized_data_max = normalized_data.max(axis=(0, 1), keepdims=True)
+        
+        # Clip values to ensure they stay within the range [0, 1] before multiplying by 255
+        scaled_data = np.clip((normalized_data - normalized_data_min) / (normalized_data_max - normalized_data_min), 0, 1) * 255
+        
+        # Convert to uint8 for image representation
+        scaled_data = scaled_data.astype(np.uint8)
+        
+        return scaled_data
 
     def __len__(self):
         return len(self.files)
 
-    # def __getitem__(self, index):
-    #     # Use filename as the unique index name.
-    #     file_path = self.files[index]
-    #     index_name = os.path.basename(file_path)
-
-
-        
-    #     # Load the .nc file.
-    #     dataset = xr.load_dataset(file_path)
-        
-    #     # 
-    #     prompt_kwargs = self.prompt_kwargs.copy() 
-        
-        
-    #     # Generate the RGB image from selected climate variables.
-    #     rgb_image, [var1, var2, var3] = self.to_image(dataset)  # see function below
-        
-    #     # Generate the binary mask from the dataset.
-    #     climatenet_label = prompt_kwargs.pop("climatenet_label", 'cyclone')
-    #     mask = self.get_labels(dataset, label_name=climatenet_label)  # see function below
-        
-    #     # Apply optional transforms.
-    #     if self.transforms is not None:
-    #         transformed = self.transforms(image=rgb_image, mask=mask)
-    #         rgb_image, mask = transformed["image"], transformed["mask"]
-        
-    #     # Generate prompts (point, box, and noisy masks).
-    #     point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
-    #         gt_mask=mask,
-    #         tgt_prompts=[random.choice(['point', 'box', 'mask'])] if self.train_flag else ['point', 'box'],
-    #         **prompt_kwargs
-    #     )
-        
-    #     # Return a dictionary that matches the expected format.
-    #     return {
-    #         "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension
-    #         "images": rgb_image,  # should be in (H, W, 3) format as a numpy array.
-    #         "gt_masks": mask,     # binary mask.
-    #         "index_name": index_name,
-    #         "point_coords": point_coords,
-    #         "box_coords": box_coords,
-    #         "noisy_object_masks": noisy_object_masks,
-    #         "object_masks": object_masks,
-    #         "var_names": [var1, var2, var3]
-    #     }
     
     def __getitem__(self, index):
         # Use filename as the unique index name.
@@ -101,41 +111,49 @@ class ClimateDataset(Dataset):
         # Generate the binary mask from the dataset.
         climatenet_label = prompt_kwargs.pop("climatenet_label", 'cyclone')
         mask = self.get_labels(dataset, label_name=climatenet_label)  # see function below
-        data = self.get_data(dataset)
+        data = dataset.to_array().values.squeeze()
+        
+        # Apply Z-normalization to the data
+        data = self.z_normalize_and_scale(data)
+        
+        rgb_image = self.to_image(dataset, var_1='TMQ', var_2='U850', var_3='V850')
         # Return a dictionary that matches the expected format.
         return {
             "file_name": os.path.splitext(index_name)[0],  # file name without the .nc extension,
+            "image": rgb_image,
             "input": data,
             "gt_masks": mask,     # binary mask.
             "index_name": index_name
         }
     
-    def get_data(self, dataset):
+
+    def to_image(self, dataset, var_1='TMQ', var_2='U850', var_3='V850'):
         """
-        Convert the dataset into a multi-channel image using all 16 variables.
-        Returns:
-            image: numpy array of shape (H, W, 16)
-            var_names: list of variable names
+        Convert the dataset into an RGB image using three selected variables.
         """
-        # Get the dataset as a variable x height x width array
-        features = dataset.to_array()  # shape: (variable, H, W)
+        # Assume dataset.to_array() gives an array with a "variable" dimension.
+        features = dataset.to_array()
+        # Select the variables (you may need to adjust this if your dataset is structured differently).
+        var1 = features.sel(variable=var_1).values
+        var2 = features.sel(variable=var_2).values
+        var3 = features.sel(variable=var_3).values
 
-        # Get variable names
-        var_names = features.variable.values.tolist()
+        # Ensure variables are 2D (H, W) before stacking
+        var1 = np.squeeze(var1)
+        var2 = np.squeeze(var2)
+        var3 = np.squeeze(var3)
+        
+        # Stack the channels to form an RGB image.
+        rgb_image = np.stack([var1, var2, var3], axis=-1)
+        # Normalize the image to 0-255.
+        rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min())
+        rgb_image = (rgb_image * 255).astype(np.uint8)
 
-        # Convert to numpy and transpose to (H, W, C)
-        # shape: (variable, H, W) → (H, W, variable)
-        data = features.values  # shape: (16, H, W)
-        data = np.transpose(data, (1, 2, 0))  # shape: (H, W, 16)
+        # Remove the batch dimension if it exists (1, H, W, C) → (H, W, C)
+        if rgb_image.shape[0] == 1:
+            rgb_image = np.squeeze(rgb_image, axis=0) 
 
-        # Normalize each channel individually to [0, 255]
-        data_min = data.min(axis=(0, 1), keepdims=True)
-        data_max = data.max(axis=(0, 1), keepdims=True)
-        data = (data - data_min) / (data_max - data_min + 1e-8)  # add epsilon to avoid division by zero
-        data = (data * 255).astype(np.uint8)
-
-        return data
-
+        return rgb_image
 
     def get_labels(self, dataset, label_name='cyclone'):
         """

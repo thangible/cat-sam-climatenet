@@ -132,7 +132,7 @@ def initialize_model(worker_args, device, local_rank):
     else:
         raise ValueError(f'invalid cat_type: {worker_args.cat_type}!')
     
-    unet_model = pre_model_class(n_channels=16, n_classes=3).to(device)
+    unet_model = pre_model_class(n_channels=16, n_classes=2).to(device)
             
     return cat_sam_model, unet_model
 
@@ -247,7 +247,9 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         batch = batch_to_cuda(batch, device)
 
         # ✅ Forward through UNet to get 3-channel feature maps
-        unet_output = unet_model(batch['input'])  # shape: [B, 3, H, W]
+        unet_output = unet_model(batch['input'])  # shape: [B, 2, H, W]
+        # Get the predicted class (argmax along channel dimension)
+        predicted_prompt = torch.argmax(unet_output, dim=1).squeeze()
         
         # Initialize lists to hold the generated prompts
         point_coords_list = []
@@ -256,15 +258,15 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         object_masks_list = []
         
         # Generate prompts for each item in the batch
-        for i in range(batch['input'].size(0)):  # Iterate over each item in the batch
-            gt_mask = batch['gt_masks'][i:i+1]  # Get the ground truth mask for the i-th item
+        for i in range(predicted_prompt.shape[0]):  # Iterate over each item in the batch
+            # gt_mask = batch['gt_masks'][i:i+1]  # Get the ground truth mask for the i-th item
             
             # Randomly choose a prompt type for this item
             prompt_type = random.choice(['point', 'box', 'mask'])
             
             # Generate prompts for the current item
             point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
-                gt_mask=gt_mask,
+                gt_mask=predicted_prompt,
                 tgt_prompts=[prompt_type]
             )
             
@@ -301,7 +303,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
 
         # ✅ Forward through CAT-SAM using the 3-channel feature maps
         masks_pred = cat_sam_model(
-            imgs=unet_output,  # <- instead of batch['images']
+            imgs=batch['image'],  # <- instead of batch['images']
             point_coords=batch['point_coords'],
             point_labels=batch['point_labels'],
             box_coords=batch['box_coords'],
@@ -309,7 +311,7 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         )
 
         # Loss computation and training step
-        masks_gt = batch['object_masks']
+        masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
         total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
 
@@ -415,6 +417,7 @@ def validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eva
         float: The updated best mean IoU after validation.
     """
     cat_sam_model.eval()
+    unet_model.eval()  
     valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
     for val_step, batch in enumerate(val_dataloader):
         batch = batch_to_cuda(batch, device)
