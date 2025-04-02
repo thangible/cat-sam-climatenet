@@ -47,7 +47,7 @@ class ClimateDataset(Dataset):
         
         for file in self.files:
             dataset = xr.load_dataset(file)
-            data = self.get_data(dataset)
+            data = dataset.to_array().values.squeeze()
             means.append(np.mean(data, axis=(1,2)))  # Mean for each of the 16 channels
             stds.append(np.std(data, axis=(1,2)))    # Std for each of the 16 channels
         
