@@ -152,6 +152,7 @@ def make_noisy_mask_on_objects(object_masks, scale_factor: int = 8, noisy_mask_t
 
 
 def generate_prompts_from_mask(
+        device,
         gt_mask: np.ndarray, tgt_prompts: List[str],
         object_connectivity: int = 8, area_threshold: int = 20,
         relative_threshold: bool = True, relative_threshold_ratio: float = 0.001,
@@ -187,5 +188,14 @@ def generate_prompts_from_mask(
     # since object_masks act as the label for training, we give one zero mask when there is no object
     else:
         object_masks = np.zeros(shape=(1, gt_mask.shape[-2], gt_mask.shape[-1]), dtype=np.float32)
-
+        
+    if device is not None:
+        if point_coords is not None:
+            point_coords = torch.FloatTensor(point_coords).to(device)
+        if box_coords is not None:
+            box_coords = torch.FloatTensor(box_coords).to(device)
+        if noisy_object_masks is not None:
+            noisy_object_masks = torch.FloatTensor(noisy_object_masks).to(device)
+        if object_masks is not None:
+            object_masks = torch.FloatTensor(object_masks).to(device)
     return point_coords, box_coords, noisy_object_masks, object_masks

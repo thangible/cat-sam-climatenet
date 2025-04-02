@@ -267,7 +267,8 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
             
             # Generate prompts for the current item
             point_coords, box_coords, noisy_object_masks, object_masks = generate_prompts_from_mask(
-                gt_mask=predicted_prompt,
+                device,
+                gt_mask=predicted_prompt[i].detach().cpu().numpy().astype(np.uint8),
                 tgt_prompts=[prompt_type]
             )
             
