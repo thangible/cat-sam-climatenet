@@ -253,7 +253,8 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         # ✅ Forward through UNet to get 3-channel feature maps
         unet_output = unet_model(batch['input'])  # shape: [B, 2, H, W]
         # Get the predicted class (argmax along channel dimension)
-        predicted_prompt = torch.argmax(unet_output, dim=1).squeeze()
+        unet_mask = torch.argmax(unet_output, dim=1)
+        predicted_prompt = unet_mask.squeeze()
         
         # Initialize lists to hold the generated prompts
         point_coords_list = []
@@ -324,11 +325,11 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         
         
         
-        total_combined_loss, combined_loss_dict = combined_loss(masks_pred, predicted_prompt, masks_gt, sam_weight=1.0, unet_weight=1.0)
+        total_combined_loss, combined_loss_dict = combined_loss(masks_pred, unet_mask, masks_gt, sam_weight=1.0, unet_weight=1.0)
 
 
         if worker_args.wandb:
-            log_training_metrics(epoch, train_step, masks_pred, masks_gt, combined_loss_dict)
+            log_training_metrics(epoch, combined_loss_dict)
 
         backward_context = cat_sam_model.no_sync if torch.distributed.is_initialized() else nullcontext
         with backward_context():
@@ -365,7 +366,7 @@ def combined_loss(sam_pred, unet_output, masks_gt, sam_weight=1.0, unet_weight=1
     sam_total_loss, sam_loss_dict = calculate_losses(sam_pred, masks_gt)
 
     # Calculate U-Net loss
-    unet_total_loss, unet_loss_dict = calculate_losses(unet_output, masks_gt.squeeze())
+    unet_total_loss, unet_loss_dict = calculate_losses(unet_output, masks_gt)
 
     # Combine the two losses with respective weights
     total_combined_loss = (sam_weight * sam_total_loss) + (unet_weight * unet_total_loss)
@@ -425,15 +426,13 @@ def calculate_losses(masks_pred, masks_gt):
     return total_loss, loss_dict
 
 
-def log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict):
+def log_training_metrics(epoch, loss_dict):
     # if epoch == 0 and train_step == 0:
         
     wandb.log({
-        "epoch": epoch,
-        "total_loss": loss_dict['total_loss'].item(),
-        "bce_loss": loss_dict['bce_loss'].item(),
-        "dice_loss": loss_dict['dice_loss'].item()
-    })
+    "epoch": epoch,
+    **{key: value.item() for key, value in loss_dict.items()}
+})
 
 
 def reduce_losses(loss_dict):
