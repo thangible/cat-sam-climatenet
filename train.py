@@ -302,8 +302,8 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
                 point_coords.append(_point_coords)
                 point_labels.append(_point_labels)
         
-        print(type(point_labels))  # Should be a list
-        print([type(pl) for pl in point_labels])  # Check the type of each element in the list        
+        # print(type(point_labels))  # Should be a list
+        # print([type(pl) for pl in point_labels])  # Check the type of each element in the list        
         batch['point_coords'] = [pc.to(device=device, dtype=torch.float32) if pc is not None else None for pc in point_coords]
         batch['point_labels'] = [torch.tensor(pl, dtype=torch.long, device=device) if pl is not None else None for pl in point_labels]
         batch['box_coords'] = \
@@ -414,6 +414,15 @@ def calculate_losses(masks_pred, masks_gt):
             label = label.squeeze()  # Remove unnecessary dimensions from label
         elif len(pred.shape) > len(label.shape):
             pred = pred.unsqueeze(0).unsqueeze(0)  # Add dimensions to pred
+
+        # Allow 2D tensors if they are already compatible
+        if len(pred.shape) == 2 and len(label.shape) == 2:
+            pred = pred.unsqueeze(0).unsqueeze(0)  # Convert to 4D for consistency
+            label = label.unsqueeze(0).unsqueeze(0)
+
+        # Ensure both tensors are 4D
+        if len(pred.shape) != 4 or len(label.shape) != 4:
+            raise ValueError(f"Shape mismatch: pred shape {pred.shape}, label shape {label.shape}")
 
         # Ensure both tensors are 4D
         if len(pred.shape) != 4 or len(label.shape) != 4:
