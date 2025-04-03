@@ -298,8 +298,8 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
                         _p_c.extend([[0, 0] for _ in range(max_num_coords - curr_num_coords)])
                         _point_labels[-1].extend([-1 for _ in range(max_num_coords - curr_num_coords)])
 
-                point_coords.append(torch.FloatTensor(_point_coords).to(device))
-                point_labels.append(torch.LongTensor(_point_labels).to(device))
+                point_coords.append(_point_coords)
+                point_labels.append(_point_labels)
                 
         batch['point_coords'] = [pc.to(device=device, dtype=torch.float32) if pc is not None else None for pc in point_coords]
         batch['point_labels'] = [pl.to(device=device, dtype=torch.long) if pl is not None else None for pl in point_labels ]
