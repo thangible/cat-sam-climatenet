@@ -298,8 +298,8 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
                         _p_c.extend([[0, 0] for _ in range(max_num_coords - curr_num_coords)])
                         _point_labels[-1].extend([-1 for _ in range(max_num_coords - curr_num_coords)])
 
-                point_coords.append(torch.FloatTensor(_point_coords))
-                point_labels.append(torch.LongTensor(_point_labels))
+                point_coords.append(torch.FloatTensor(_point_coords).to(device))
+                point_labels.append(torch.LongTensor(_point_labels).to(device))
                 
         batch['point_coords'] = [pc.to(device=device, dtype=torch.float32) if pc is not None else None for pc in point_coords]
         batch['point_labels'] = [pl.to(device=device, dtype=torch.long) if pl is not None else None for pl in point_labels ]
@@ -592,8 +592,7 @@ def main_worker(worker_id, worker_args):
 
     for epoch in range(1, max_epoch_num + 1):
         train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num)
-        # if local_rank == 0 and epoch % valid_per_epochs == 0:
-        #     validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
+        # if local_rank == 0 and e5poch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
 
 if __name__ == '__main__':
     args = parse()
