@@ -408,6 +408,18 @@ def calculate_losses(masks_pred, masks_gt):
     bce_loss_list, dice_loss_list = [], []
     for i in range(len(masks_pred)):
         pred, label = masks_pred[i], masks_gt[i]
+        
+        # Ensure both pred and label have the same shape
+        if len(label.shape) > len(pred.shape):
+            label = label.squeeze()  # Remove unnecessary dimensions from label
+        elif len(pred.shape) > len(label.shape):
+            pred = pred.unsqueeze(0).unsqueeze(0)  # Add dimensions to pred
+
+        # Ensure both tensors are 4D
+        if len(pred.shape) != 4 or len(label.shape) != 4:
+            raise ValueError(f"Shape mismatch: pred shape {pred.shape}, label shape {label.shape}")
+        
+        
         label = torch.where(torch.gt(label, 0.), 1., 0.)
         b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
         d_loss = calculate_dice_loss(pred, label)
