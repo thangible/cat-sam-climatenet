@@ -300,9 +300,11 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
 
                 point_coords.append(_point_coords)
                 point_labels.append(_point_labels)
-                
+        
+        print(type(point_labels))  # Should be a list
+        print([type(pl) for pl in point_labels])  # Check the type of each element in the list        
         batch['point_coords'] = [pc.to(device=device, dtype=torch.float32) if pc is not None else None for pc in point_coords]
-        batch['point_labels'] = [pl.to(device=device, dtype=torch.long) if pl is not None else None for pl in point_labels ]
+        batch['point_labels'] = [torch.tensor(pl, dtype=torch.long, device=device) if pl is not None else None for pl in point_labels]
         batch['box_coords'] = \
             [torch.FloatTensor(item).to(device=device, dtype=torch.float32) if item is not None else None for item in box_coords_list]
         batch['noisy_object_masks'] = [nom.to(device=device, dtype=torch.float32) if nom is not None else None for nom in noisy_object_masks_list]
