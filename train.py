@@ -365,7 +365,7 @@ def combined_loss(sam_pred, unet_output, masks_gt, sam_weight=1.0, unet_weight=1
     sam_total_loss, sam_loss_dict = calculate_losses(sam_pred, masks_gt)
 
     # Calculate U-Net loss
-    unet_total_loss, unet_loss_dict = calculate_losses(unet_output, masks_gt)
+    unet_total_loss, unet_loss_dict = calculate_losses(unet_output, masks_gt.squeeze())
 
     # Combine the two losses with respective weights
     total_combined_loss = (sam_weight * sam_total_loss) + (unet_weight * unet_total_loss)
