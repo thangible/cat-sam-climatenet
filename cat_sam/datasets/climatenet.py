@@ -188,6 +188,16 @@ class ClimateDataset(Dataset):
         Handles image/mask tensors without assuming same spatial shape.
         """
         batch_dict = {key: [] for key in batch[0].keys()}
+        
+        while len(batch) != 0:
+            ele_dict = batch[0]
+            if ele_dict is not None:
+                for key in ele_dict.keys():
+                    if key not in batch_dict.keys():
+                        batch_dict[key] = []
+                    batch_dict[key].append(ele_dict[key])
+            # remove the redundant data for memory safety
+            batch.remove(ele_dict)
 
         for sample in batch:
             for key, value in sample.items():

@@ -198,4 +198,6 @@ def generate_prompts_from_mask(
             noisy_object_masks = torch.FloatTensor(noisy_object_masks).to(device)
         if object_masks is not None:
             object_masks = torch.FloatTensor(object_masks).to(device)
+            
     return point_coords, box_coords, noisy_object_masks, object_masks
+

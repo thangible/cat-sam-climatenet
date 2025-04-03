@@ -319,26 +319,67 @@ def train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimize
         # Loss computation and training step
         masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
-        total_loss, loss_dict = calculate_losses(masks_pred, masks_gt)
+        
+        
+        
+        total_combined_loss, combined_loss_dict = combined_loss(masks_pred, predicted_prompt, masks_gt, sam_weight=1.0, unet_weight=1.0)
+
 
         if worker_args.wandb:
-            log_training_metrics(epoch, train_step, masks_pred, masks_gt, loss_dict)
+            log_training_metrics(epoch, train_step, masks_pred, masks_gt, combined_loss_dict)
 
         backward_context = cat_sam_model.no_sync if torch.distributed.is_initialized() else nullcontext
         with backward_context():
-            total_loss.backward()
+            total_combined_loss.backward()
 
         optimizer.step()
         optimizer.zero_grad()
-        reduce_losses(loss_dict)
+        reduce_losses(combined_loss_dict)
 
         if train_pbar:
-            update_progress_bar(train_pbar, epoch, max_epoch_num, loss_dict)
+            update_progress_bar(train_pbar, epoch, max_epoch_num, combined_loss_dict)
 
     scheduler.step()
     if train_pbar:
         train_pbar.clear()
 
+def combined_loss(sam_pred, unet_output, masks_gt, sam_weight=1.0, unet_weight=1.0):
+    """
+    Combines the SAM loss and U-Net loss.
+
+    Args:
+        sam_pred: The predicted masks from SAM.
+        sam_gt: The ground truth masks for SAM.
+        unet_output: The predicted masks from U-Net.
+        unet_gt: The ground truth masks for U-Net.
+        sam_weight: Weight for the SAM loss in the combined loss.
+        unet_weight: Weight for the U-Net loss in the combined loss.
+
+    Returns:
+        total_combined_loss: The total combined loss.
+        combined_loss_dict: Dictionary containing the individual losses and the total combined loss.
+    """
+    # Calculate SAM loss
+    sam_total_loss, sam_loss_dict = calculate_losses(sam_pred, masks_gt)
+
+    # Calculate U-Net loss
+    unet_total_loss, unet_loss_dict = calculate_losses(unet_output, masks_gt)
+
+    # Combine the two losses with respective weights
+    total_combined_loss = (sam_weight * sam_total_loss) + (unet_weight * unet_total_loss)
+
+    # Combine individual losses into one dictionary for logging purposes
+    combined_loss_dict = {
+        "sam_total_loss": sam_loss_dict["total_loss"],
+        "unet_total_loss": unet_loss_dict["total_loss"],
+        "combined_total_loss": total_combined_loss,
+        "sam_bce_loss": sam_loss_dict["bce_loss"],
+        "unet_bce_loss": unet_loss_dict["bce_loss"],
+        "sam_dice_loss": sam_loss_dict["dice_loss"],
+        "unet_dice_loss": unet_loss_dict["dice_loss"]
+    }
+
+    return total_combined_loss, combined_loss_dict
 
 
 def preprocess_masks(masks_pred, masks_gt):
@@ -351,6 +392,13 @@ def preprocess_masks(masks_pred, masks_gt):
             if len(masks[i].shape) != 4:
                 raise RuntimeError(f"Unexpected mask shape: {masks[i].shape}. Expected a 4D tensor.")
     return masks_pred, masks_gt
+
+def unet_loss(unet_output, gt_masks):
+    bce_loss = F.binary_cross_entropy_with_logits(unet_output, gt_masks.float())
+    dice_loss = calculate_dice_loss(unet_output, gt_masks)
+    total_unet_loss = bce_loss + dice_loss
+    return total_unet_loss
+
 
 
 def calculate_losses(masks_pred, masks_gt):
@@ -435,6 +483,11 @@ def validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eva
             masks_pred = val_model.infer(point_coords=batch['point_coords'])
         masks_gt = batch['gt_masks']
         masks_pred, masks_gt = preprocess_masks(masks_pred, masks_gt)
+        
+        # Calculate losses for both SAM and U-Net models
+        unet_output = unet_model(batch['input'])  # U-Net output from batch input
+        total_loss, loss_dict = combined_loss(masks_pred, masks_gt, unet_output, masks_gt, sam_weight=1.0, unet_weight=1.0)
+
         
         with torch.no_grad():
             _, loss_dict = calculate_losses(masks_pred, masks_gt)
@@ -539,8 +592,8 @@ def main_worker(worker_id, worker_args):
 
     for epoch in range(1, max_epoch_num + 1):
         train_one_epoch(epoch, train_dataloader, cat_sam_model, unet_model, optimizer, scheduler, device, local_rank, worker_args, max_epoch_num)
-        if local_rank == 0 and epoch % valid_per_epochs == 0:
-            validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
+        # if local_rank == 0 and epoch % valid_per_epochs == 0:
+        #     validate_one_epoch(epoch, val_dataloader, cat_sam_model, unet_model, iou_eval, device, exp_path, best_miou, worker_args, max_epoch_num)
 
 if __name__ == '__main__':
     args = parse()
