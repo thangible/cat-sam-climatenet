@@ -429,7 +429,7 @@ def calculate_losses(masks_pred, masks_gt):
             raise ValueError(f"Shape mismatch: pred shape {pred.shape}, label shape {label.shape}")
         
         
-        label = torch.where(torch.gt(label, 0.), 1., 0.)
+        label = torch.where(torch.gt(label, 0.), 1., 0.).float()
         b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
         d_loss = calculate_dice_loss(pred, label)
 
