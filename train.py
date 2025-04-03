@@ -430,7 +430,7 @@ def calculate_losses(masks_pred, masks_gt):
         
         
         label = torch.where(torch.gt(label, 0.), 1., 0.).float()
-        b_loss = F.binary_cross_entropy_with_logits(pred, label.float())
+        b_loss = F.binary_cross_entropy_with_logits(pred, label)
         d_loss = calculate_dice_loss(pred, label)
 
         bce_loss_list.append(b_loss)
